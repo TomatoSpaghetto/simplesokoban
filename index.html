@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimpleSokoban</title>
+    <style>
+        body { margin: 0; background: black; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: white; font-family: sans-serif; overflow: hidden; }
+        canvas { border: 1px solid white; display: none; image-rendering: pixelated; }
+        #menu { text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100vh; overflow-y: auto; padding: 20px; box-sizing: border-box; }
+        .btn { padding: 10px 20px; margin: 10px; background: #444; color: white; border: 1px solid white; cursor: pointer; font-size: 18px; }
+        .btn:hover { background: #666; }
+        #level-select { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px; max-height: 50vh; overflow-y: auto; width: 100%; max-width: 400px; padding: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); border-radius: 5px; }
+        #level-select .btn { width: 90%; margin: 0; }
+        #game-ui { display: none; flex-direction: row; align-items: flex-start; width: 100%; height: 100vh; }
+        .game-sidebar { display: flex; flex-direction: column; gap: 10px; padding: 20px; background: rgba(255,255,255,0.05); height: 100%; box-sizing: border-box; min-width: 200px; }
+        #level-title { font-size: 24px; font-weight: bold; margin-bottom: 20px; color: yellow; }
+        #game-controls { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+        #game-controls .btn { margin: 0; width: 100%; }
+        #game-canvas-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; height: 100%; overflow: hidden; position: relative; }
+        #mobile-controls { display: none; position: absolute; bottom: 20px; right: 20px; gap: 5px; z-index: 500; opacity: 0.5; }
+        #mobile-controls:active, .touch-active { opacity: 1; }
+        .mobile-row { display: flex; justify-content: center; gap: 5px; }
+        .mobile-btn {
+            width: 45px; height: 45px; background: rgba(255,255,255,0.2); border: 2px solid white;
+            border-radius: 10px; display: flex; justify-content: center; align-items: center;
+            font-size: 18px; color: white; user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-btn:active { background: rgba(255,255,255,0.4); }
+        #editor-ui { display: none; flex-direction: row; justify-content: center; align-items: center; width: 100%; height: 100vh; gap: 20px; }
+        .palette { display: flex; flex-direction: column; gap: 15px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px; }
+        .palette-item { width: 48px; height: 48px; border: 2px solid transparent; cursor: pointer; background-size: contain; image-rendering: pixelated; }
+
+        .editor-controls { display: flex; flex-direction: column; gap: 10px; }
+        #win-overlay {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border: 2px solid white;
+            text-align: center;
+            z-index: 1000;
+            width: 80%;
+            max-width: 500px;
+            box-sizing: border-box;
+        }
+        #win-overlay h2 { font-size: 48px; margin-bottom: 20px; color: yellow; font-weight: bold; }
+        .win-btn-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .menu-button-row { display: flex; justify-content: center; gap: 10px; width: 100%; max-width: 400px; flex-direction: row !important; }
+    .menu-button-row .btn { flex: 1; margin: 5px 0; min-width: 0; }
+    @media (max-width: 600px) {
+        #menu { padding: 10px; }
+        .menu-button-row { flex-direction: row !important; gap: 5px; }
+        .menu-button-row .btn { font-size: 14px; padding: 10px 5px; }
+            #game-ui { flex-direction: column; }
+            .game-sidebar { height: auto; width: 100%; min-width: 0; padding: 10px; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+            #level-title { margin-bottom: 0; font-size: 18px; }
+            #game-controls { flex-direction: row; width: auto; }
+            #game-controls .btn { padding: 5px 10px; font-size: 14px; width: auto; }
+            #editor-ui { flex-direction: row; gap: 10px; padding: 10px; justify-content: space-between; }
+            .palette { flex-direction: column; order: 3; width: auto; height: 100%; justify-content: center; }
+            .editor-controls { flex-direction: column; flex-wrap: nowrap; order: 1; width: auto; height: 100%; justify-content: center; }
+            .editor-controls .btn { padding: 8px 12px; font-size: 12px; margin: 2px; width: 80px; }
+            .palette-item { width: 36px; height: 36px; }
+            #editorCanvas { order: 2; flex-grow: 1; width: 0; }
+        }
+    </style>
+</head>
+<body>
+<div id="win-overlay">
+    <h2 id="win-message">You win!</h2>
+    <div class="win-btn-container">
+        <button class="btn" id="next-lvl-btn" onclick="nextLevel()">Next Level</button>
+        <button class="btn" id="replay-lvl-btn" onclick="replayLevel()">Replay Level</button>
+        <button class="btn" id="prev-lvl-btn" onclick="previousLevel()">Previous Level</button>
+        <button class="btn" id="win-menu-btn" onclick="showMenu()">Main Menu</button>
+        <button class="btn" id="win-editor-btn" onclick="returnToEditor()">Return to Level Editor</button>
+    </div>
+</div>
+<div id="menu">
+    <h1>SimpleSokoban</h1>
+    <p>Select a Level</p>
+    <div id="level-select"></div>
+    <div id="local-load-fallback" style="margin-top: 20px; border: 1px dashed #666; padding: 15px;">
+        <p>Load a custom <code>level.txt</code> file:</p>
+        <input type="file" id="level-file-input" accept=".txt">
+    </div>
+    <div class="menu-button-row">
+        <button class="btn" onclick="openEditor()">Level Editor</button>
+        <button class="btn" onclick="downloadLevelsFile()">Download level.txt</button>
+    </div>
+</div>
+<div id="game-ui">
+    <div class="game-sidebar">
+        <div id="level-title"></div>
+        <div id="game-controls">
+            <button class="btn" id="back-to-menu-btn" onclick="showMenu()">Back to Menu</button>
+            <button class="btn" id="back-to-editor-btn" style="display: none;" onclick="returnToEditor()">Back to Editor</button>
+            <button class="btn" onclick="restartLevel()">Restart Level</button>
+        </div>
+    </div>
+    <div id="game-canvas-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="mobile-controls">
+            <div class="mobile-row">
+                <div class="mobile-btn" data-dir="up">↑</div>
+            </div>
+            <div class="mobile-row">
+                <div class="mobile-btn" data-dir="left">←</div>
+                <div class="mobile-btn" data-dir="down">↓</div>
+                <div class="mobile-btn" data-dir="right">→</div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="editor-ui">
+    <div class="editor-controls">
+        <button class="btn" onclick="testLevel()">Test Level</button>
+        <button class="btn" onclick="clearEditorGrid()">Clear</button>
+        <button class="btn" onclick="saveLevel()">Download & Import</button>
+        <button class="btn" onclick="deleteCurrentLevel()">Delete Level</button>
+        <button class="btn" onclick="showMenu()">Back to Menu</button>
+    </div>
+    <canvas id="editorCanvas"></canvas>
+    <div class="palette">
+        <div class="palette-item" id="p-wall" onclick="selectTool('wall')" title="Wall"></div>
+        <div class="palette-item" id="p-box" onclick="selectTool('box')" title="Box"></div>
+        <div class="palette-item" id="p-switch" onclick="selectTool('switch')" title="Switch"></div>
+        <div class="palette-item" id="p-player" onclick="selectTool('player')" title="Player"></div>
+        <div class="palette-item" id="p-floor" onclick="selectTool('floor')" title="Floor/Erase"></div>
+    </div>
+</div>
+<script>
+    // Constants
+    const GRID_SIZE = 16;
+    const MAX_COL = 26;
+    const MAX_ROW = 26;
+
+    // Preload all images
+    const images = {
+        floor: new Image(),
+        wall: new Image(),
+        box: new Image(),
+        switch: new Image(),
+        lookdown: new Image(),
+        lookleft: new Image(),
+        lookright: new Image(),
+        lookup: new Image()
+    };
+
+    images.floor.src = 'floor.png';
+    images.wall.src = 'wall.png';
+    images.box.src = 'box.png';
+    images.switch.src = 'switch.png';
+    images.lookdown.src = 'lookdown.png';
+    images.lookleft.src = 'lookleft.png';
+    images.lookright.src = 'lookright.png';
+    images.lookup.src = 'lookup.png';
+
+    // Level data
+    const levels = [];
+    let currentLevelIndex = 0;
+
+    // Game state
+    let canvas, ctx;
+    let editorCanvas, editorCtx;
+    let grid = [];  // 2D array: 'wall', 'floor', 'switch', null
+    let boxes = []; // array of {x, y}
+    let player = { x: 0, y: 0, facing: 'down' };
+    let width = 0, height = 0;
+    let scale = 4;  // Zoom level (adjust if needed)
+    let editorScale = 2;
+    let baseEditorScale = 2;
+    let editorPinchScale = 1;
+    let currentTool = 'wall';
+    let isEditing = false;
+    let isTesting = false;
+    let isWinning = false;
+    let isMobile = false;
+    let testLevelData = null;
+
+    // Detect mobile device
+    function detectMobile() {
+        isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window);
+    }
+    detectMobile();
+
+    // Attach mobile control events
+    function initMobileControls() {
+        const container = document.getElementById('mobile-controls');
+        const mobileBtns = document.querySelectorAll('.mobile-btn');
+        
+        container.addEventListener('touchstart', () => {
+            container.classList.add('touch-active');
+        });
+        container.addEventListener('touchend', () => {
+            container.classList.remove('touch-active');
+        });
+        container.addEventListener('touchcancel', () => {
+            container.classList.remove('touch-active');
+        });
+
+        mobileBtns.forEach(btn => {
+            const dir = btn.getAttribute('data-dir');
+            
+            const handlePress = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleMobileMove(dir);
+            };
+
+            btn.addEventListener('mousedown', handlePress);
+            btn.addEventListener('touchstart', handlePress);
+        });
+    }
+
+    // Call init when DOM is ready
+    window.addEventListener('DOMContentLoaded', initMobileControls);
+
+    // Editor state (26x26 default for new levels)
+    const EDITOR_WIDTH = 26;
+    const EDITOR_HEIGHT = 26;
+    let editorGrid = [];
+    let editorBoxes = [];
+    let editorPlayer = { x: 1, y: 1 };
+
+    // Directions
+    const directions = {
+        up: { dx: 0, dy: -1, look: 'lookup' },
+        down: { dx: 0, dy: 1, look: 'lookdown' },
+        left: { dx: -1, dy: 0, look: 'lookleft' },
+        right: { dx: 1, dy: 0, look: 'lookright' }
+    };
+
+    function isPlayerEnclosed(gridArray, w, h, px, py) {
+        const visited = Array.from({length: w}, () => Array(h).fill(false));
+        const floodFromEdges = (w, h, isWallFn, fillFn) => {
+            for (let y = 0; y < h; y++) {
+                if (!isWallFn(0, y)) fillFn(0, y);
+                if (!isWallFn(w - 1, y)) fillFn(w - 1, y);
+            }
+            for (let x = 0; x < w; x++) {
+                if (!isWallFn(x, 0)) fillFn(x, 0);
+                if (!isWallFn(x, h - 1)) fillFn(x, h - 1);
+            }
+        };
+        const floodFillFn = (x, y) => {
+            const stack = [[x, y]];
+            while (stack.length > 0) {
+                const [cx, cy] = stack.pop();
+                if (cx < 0 || cx >= w || cy < 0 || cy >= h || 
+                    gridArray[cx][cy] === 'wall' || visited[cx][cy]) continue;
+                visited[cx][cy] = true;
+                stack.push([cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]);
+            }
+        };
+        floodFromEdges(w, h, (x, y) => gridArray[x][y] === 'wall', floodFillFn);
+        
+        // If the player's position was NOT visited by the flood fill from edges, 
+        // it means they are in an enclosed space (or they are a wall, which shouldn't happen).
+        // Also check if the player's position is actually inside the grid.
+        if (px < 0 || px >= w || py < 0 || py >= h) return false;
+        return !visited[px][py] && gridArray[px][py] !== 'wall';
+    }
+
+    function showEnclosureWarning(returnMode) {
+        const overlay = document.getElementById('win-overlay');
+        const message = document.getElementById('win-message');
+        const nextBtn = document.getElementById('next-lvl-btn');
+        const replayBtn = document.getElementById('replay-lvl-btn');
+        const prevBtn = document.getElementById('prev-lvl-btn');
+        const menuBtn = document.getElementById('win-menu-btn');
+        const editorBtn = document.getElementById('win-editor-btn');
+
+        message.innerText = "Error: Player must be in an enclosed space!";
+        nextBtn.style.display = 'none';
+        replayBtn.style.display = 'none';
+        prevBtn.style.display = 'none';
+        
+        if (returnMode === "Return to Level Editor") {
+            menuBtn.style.display = 'none';
+            editorBtn.innerText = "Return to Level Editor";
+            editorBtn.style.display = 'inline-block';
+        } else {
+            menuBtn.innerText = "Main Menu";
+            menuBtn.style.display = 'inline-block';
+            editorBtn.style.display = 'none';
+        }
+        
+        overlay.style.display = 'block';
+    }
+
+    // Init when all images loaded
+    let loadedImages = 0;
+    Object.values(images).forEach(img => {
+        img.onload = () => {
+            loadedImages++;
+            if (loadedImages === Object.keys(images).length) {
+                initGame();
+            }
+        };
+    });
+
+    async function initGame() {
+        canvas = document.getElementById('gameCanvas');
+        ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        editorCanvas = document.getElementById('editorCanvas');
+        editorCtx = editorCanvas.getContext('2d');
+        editorCtx.imageSmoothingEnabled = false;
+
+        // Setup palette icons
+        document.getElementById('p-wall').style.backgroundImage = `url(${images.wall.src})`;
+        document.getElementById('p-box').style.backgroundImage = `url(${images.box.src})`;
+        document.getElementById('p-switch').style.backgroundImage = `url(${images.switch.src})`;
+        document.getElementById('p-player').style.backgroundImage = `url(${images.lookdown.src})`;
+        document.getElementById('p-floor').style.backgroundImage = `url(${images.floor.src})`;
+        selectTool('wall');
+
+        editorCanvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { // Left click
+                isPanning = false;
+                initialPinchDistance = null; // Reset pinch state on new interaction
+                lastTouchX = e.clientX;
+                lastTouchY = e.clientY;
+                handleEditorClick(e);
+            }
+        });
+        editorCanvas.addEventListener('mousemove', (e) => {
+            if (e.buttons === 1) { // Left button held
+                if (editorPinchScale > 1) {
+                    isPanning = true;
+                    const dx = (e.clientX - lastTouchX) / editorScale;
+                    const dy = (e.clientY - lastTouchY) / editorScale;
+                    editorOffsetX += dx;
+                    editorOffsetY += dy;
+                    lastTouchX = e.clientX;
+                    lastTouchY = e.clientY;
+                    resizeEditorCanvas(true);
+                } else {
+                    handleEditorClick(e);
+                }
+            }
+        });
+        
+        editorCanvas.addEventListener('touchstart', (e) => { 
+            if (e.touches.length === 2) {
+                initialPinchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                initialPinchScale = editorPinchScale;
+            } else if (e.touches.length === 1) {
+                isPanning = false;
+                initialPinchDistance = null; // Reset pinch state
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+            }
+        }, { passive: false });
+        editorCanvas.addEventListener('touchmove', (e) => { 
+            if (e.touches.length === 2 && initialPinchDistance) {
+                e.preventDefault();
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                const zoomFactor = currentDistance / initialPinchDistance;
+                editorPinchScale = Math.max(1, Math.min(5, initialPinchScale * zoomFactor));
+                resizeEditorCanvas(true);
+            } else if (e.touches.length === 1) {
+                if (editorPinchScale > 1) {
+                    e.preventDefault();
+                    isPanning = true;
+                    const dx = (e.touches[0].clientX - lastTouchX) / editorScale;
+                    const dy = (e.touches[0].clientY - lastTouchY) / editorScale;
+                    editorOffsetX += dx;
+                    editorOffsetY += dy;
+                    lastTouchX = e.touches[0].clientX;
+                    lastTouchY = e.touches[0].clientY;
+                    resizeEditorCanvas(true);
+                } else {
+                    handleEditorClick(e);
+                }
+            }
+        }, { passive: false });
+        editorCanvas.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0 && !isPanning && !initialPinchDistance) {
+                // It was a tap
+                handleEditorClick(e.changedTouches[0]);
+            }
+            if (e.touches.length < 2) {
+                initialPinchDistance = null;
+            }
+        }, { passive: false });
+        
+        // Setup pinch zoom for editor
+        initEditorPinchZoom();
+        
+        const fallbackLevels = `Level 1:
+Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 2A, 2J, 3A, 3J, 4A, 4J, 5A, 5J, 6A, 6J, 7A, 7J, 8A, 8J, 9A, 9J, 10A, 10J, 11A, 11J, 12A, 12J, 13A, 13J, 14A, 14B, 14C, 14D, 14E, 14F, 14G, 14H, 14I, 14J
+Boxes: 5D, 5F, 7G, 8G, 10F, 10D
+Switches: 3D, 3F, 7I, 8I, 12D, 12F
+Player: 7E
+
+Level 2:
+Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 2A, 2D, 2G, 2J, 3A, 3D, 3G, 3J, 4A, 4D, 4G, 4J, 5A, 5H, 5J, 6A, 6J, 7A, 7D, 7H, 7J, 8A, 8D, 8F, 8J, 9A, 9D, 9H, 9J, 10A, 10D, 10J, 11A, 11D, 11H, 11I, 11J, 12A, 12J, 13A, 13J, 14A, 14B, 14C, 14D, 14E, 14F, 14G, 14H, 14I, 14J
+Boxes: 5E, 6F, 7E, 12C, 13C, 6H
+Switches: 2C, 2E, 6D, 9G, 12I, 13I
+Player: 4E
+
+Level 3:
+Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 2A, 2D, 2H, 2J, 3A, 3D, 3H, 3J, 4A, 4D, 4G, 4H, 4J, 5A, 5D, 5J, 6A, 6H, 6J, 7A, 7C, 7D, 7F, 7H, 7J, 8A, 8H, 8J, 9A, 9C, 9J, 10A, 10E, 10F, 10J, 11A, 11C, 11E, 11G, 11J, 12A, 12J, 13A, 13J, 14A, 14B, 14C, 14D, 14E, 14F, 14G, 14H, 14I, 14J
+Boxes: 7B, 10C, 5F, 6F, 11I
+Switches: 2B, 2I, 3I, 8I, 11F
+Player: 4C
+
+Level 4:
+Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 2A, 2J, 3A, 3B, 3C, 3D, 3E, 3G, 3H, 3J, 4A, 4D, 4H, 4J, 5A, 5J, 6A, 6H, 6J, 7A, 7B, 7C, 7H, 7J, 8A, 8H, 8J, 9A, 9C, 9H, 9J, 10A, 10D, 10E, 10H, 10J, 11A, 11C, 11F, 11G, 11H, 11J, 12A, 12C, 12J, 13A, 13H, 13J, 14A, 14B, 14C, 14D, 14E, 14F, 14G, 14H, 14I, 14J
+Boxes: 7D, 8C, 3F, 5H, 13F
+Switches: 2C, 4B, 10F, 10G, 13B
+Player: 2B
+
+Level 5:
+Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 2A, 2E, 2I, 2J, 3A, 3D, 3E, 3I, 3J, 4A, 4E, 4I, 4J, 5A, 5E, 5I, 5J, 6A, 6E, 6F, 6H, 6J, 7A, 7E, 7H, 7J, 8A, 8C, 8E, 8J, 9A, 9J, 10A, 10D, 10J, 11A, 11D, 11H, 11J, 12A, 12C, 12G, 12H, 12J, 13A, 13J, 14A, 14B, 14C, 14D, 14E, 14F, 14G, 14H, 14I, 14J
+Boxes: 3C, 6D, 9D, 8H, 10H, 12F
+Switches: 2F, 2G, 2H, 3F, 3G, 3H
+Player: 2D
+
+Level 6:
+Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 2A, 2J, 3A, 3J, 4A, 4J, 5A, 5J, 6A, 6J, 7A, 7B, 7C, 7D, 7E, 7F, 7G, 7H, 7J, 8A, 8J, 9A, 9D, 9J, 10A, 10F, 10G, 10H, 10J, 11A, 11B, 11C, 11J, 12A, 12F, 12J, 13A, 13F, 13J, 14A, 14B, 14C, 14D, 14E, 14F, 14G, 14H, 14I, 14J
+Boxes: 11F, 9H, 12D, 3B, 5B, 2D, 3D, 3E, 4E, 5E, 5D, 6D, 2F, 3G, 4G, 5G, 6F
+Switches: 2B, 6B, 8B, 10I, 13I
+Player: 13B
+
+Level 7:
+Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 2A, 2C, 2E, 2F, 2J, 3A, 3F, 3J, 4A, 4B, 4C, 4E, 4H, 4J, 5A, 5H, 5J, 6A, 6C, 6E, 6F, 6G, 6J, 7A, 7E, 7J, 8A, 8B, 8C, 8D, 8E, 8G, 8H, 8I, 8J, 9A, 9J, 10A, 10C, 10E, 10H, 10J, 11A, 11C, 11E, 11J, 12A, 12J, 13A, 13E, 13I, 13J, 14A, 14B, 14C, 14D, 14E, 14F, 14G, 14H, 14I, 14J
+Boxes: 11B, 11D, 11G, 3H, 3C, 4D
+Switches: 3E, 5G, 7I, 9I, 10B, 10D
+Player: 2B
+
+Level 8:
+Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 1K, 1L, 1M, 1N, 1O, 1P, 1Q, 1R, 1S, 1T, 1U, 1V, 1W, 1X, 1Y, 1Z, 2A, 2D, 2F, 2L, 2T, 2Z, 3A, 3F, 3J, 3L, 3N, 3T, 3W, 3Z, 4A, 4F, 4J, 4L, 4N, 4T, 4W, 4Z, 5A, 5B, 5D, 5E, 5F, 5J, 5L, 5N, 5O, 5R, 5T, 5W, 5Z, 6A, 6F, 6J, 6L, 6N, 6R, 6T, 6W, 6Z, 7A, 7F, 7J, 7L, 7N, 7O, 7P, 7S, 7T, 7W, 7X, 7Z, 8A, 8B, 8C, 8D, 8F, 8J, 8L, 8N, 8T, 8X, 8Z, 9A, 9D, 9F, 9J, 9L, 9N, 9P, 9Q, 9S, 9T, 9X, 9Z, 10A, 10D, 10F, 10J, 10N, 10T, 10X, 10Z, 11A, 11D, 11F, 11G, 11I, 11J, 11K, 11L, 11M, 11N, 11O, 11P, 11Q, 11R, 11S, 11T, 11X, 11Z, 12A, 12D, 12X, 12Z, 13A, 13D, 13F, 13G, 13H, 13I, 13J, 13K, 13L, 13M, 13N, 13O, 13P, 13Q, 13S, 13T, 13U, 13V, 13W, 13X, 13Y, 13Z, 14A, 14C, 14D, 14F, 14S, 14Z, 15A, 15C, 15F, 15K, 15L, 15M, 15N, 15O, 15P, 15Q, 15R, 15S, 15X, 15Z, 16A, 16C, 16F, 16K, 16X, 16Z, 17A, 17C, 17F, 17T, 17X, 17Z, 18A, 18C, 18D, 18F, 18G, 18H, 18I, 18J, 18K, 18L, 18M, 18N, 18O, 18P, 18R, 18T, 18U, 18W, 18Z, 19A, 19D, 19J, 19R, 19T, 19W, 19Z, 20A, 20D, 20E, 20F, 20G, 20H, 20J, 20L, 20M, 20N, 20O, 20P, 20Q, 20R, 20T, 20Z, 21A, 21J, 21L, 21R, 21T, 21U, 21V, 21W, 21X, 21Z, 22A, 22J, 22L, 22R, 22T, 22W, 22X, 22Z, 23A, 23C, 23D, 23E, 23H, 23J, 23L, 23T, 23X, 23Z, 24A, 24H, 24J, 24L, 24M, 24N, 24O, 24P, 24Q, 24R, 24T, 24Z, 25A, 25H, 25J, 25T, 25X, 25Z, 26A, 26B, 26C, 26D, 26E, 26F, 26G, 26H, 26I, 26J, 26K, 26L, 26M, 26N, 26O, 26P, 26Q, 26R, 26S, 26T, 26U, 26V, 26W, 26X, 26Y, 26Z
+Boxes: 6D, 13E, 21H, 23F, 2H, 4R, 4Q, 3Y, 9V, 10U, 22P, 24S, 17Q, 24K, 24U, 19X, 20W
+Switches: 2E, 2K, 6U, 6V, 8E, 8S, 9B, 10S, 11Y, 19Q, 21M, 22U, 23B, 24Y, 25K, 25S, 25Y
+Player: 10G`;
+
+        try {
+            const response = await fetch('level.txt');
+            if (response.ok) {
+                const levelData = await response.text();
+                parseLevels(levelData);
+            } else {
+                console.warn(`HTTP error! status: ${response.status}. Using fallbacks.`);
+                parseLevels(fallbackLevels);
+            }
+
+            if (levels.length === 0) {
+                console.warn('No levels found in level.txt, using fallbacks.');
+                parseLevels(fallbackLevels);
+            }
+        } catch (error) {
+            console.warn('Failed to load levels from level.txt, using fallbacks:', error);
+            parseLevels(fallbackLevels);
+        }
+        createLevelMenu();
+        window.addEventListener('keydown', handleInput);
+        window.addEventListener('resize', () => {
+            if (isEditing) resizeEditorCanvas();
+            else fitCamera();
+        });
+        gameLoop();
+        document.getElementById('level-file-input').addEventListener('change', handleFileSelect);
+    }
+
+    function parseLevels(text) {
+        const levelBlocks = text.split(/Level \d+:/i).filter(b => b.trim());
+        levelBlocks.forEach((block, index) => {
+            levels.push({
+                name: `Level ${index + 1}`,
+                data: block.trim()
+            });
+        });
+    }
+
+    function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            levels.length = 0; // Clear current levels
+            parseLevels(content);
+            if (levels.length > 0) {
+                createLevelMenu();
+            } else {
+                alert('No levels found in the selected file.');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function createLevelMenu() {
+        const menu = document.getElementById('level-select');
+        menu.innerHTML = '';
+        levels.forEach((level, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.innerText = level.name;
+            btn.onclick = () => startLevel(index);
+            menu.appendChild(btn);
+        });
+    }
+
+    function startLevel(index) {
+        currentLevelIndex = index;
+        isTesting = false;
+        isWinning = false;
+        document.getElementById('win-overlay').style.display = 'none';
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'flex';
+        document.getElementById('gameCanvas').style.display = 'block';
+        document.getElementById('back-to-menu-btn').style.display = 'inline-block';
+        document.getElementById('back-to-editor-btn').style.display = 'none';
+        document.getElementById('level-title').innerText = levels[index].name;
+        
+        if (isMobile) {
+            document.getElementById('mobile-controls').style.display = 'flex';
+            document.getElementById('mobile-controls').style.flexDirection = 'column';
+            setTimeout(fitCamera, 100);
+        } else {
+            document.getElementById('mobile-controls').style.display = 'none';
+        }
+
+        parseLevel(levels[index].data);
+
+        if (!isPlayerEnclosed(grid, width, height, player.x, player.y)) {
+            showEnclosureWarning("Main Menu");
+            return;
+        }
+
+        fitCamera();
+    }
+
+    function showMenu() {
+        isEditing = false;
+        isTesting = false;
+        isWinning = false;
+        document.getElementById('win-overlay').style.display = 'none';
+        document.getElementById('menu').style.display = 'flex';
+        document.getElementById('game-ui').style.display = 'none';
+        document.getElementById('editor-ui').style.display = 'none';
+        document.getElementById('gameCanvas').style.display = 'none';
+        document.getElementById('mobile-controls').style.display = 'none';
+        document.getElementById('menu').scrollTop = 0;
+        document.getElementById('level-select').scrollTop = 0;
+    }
+
+    function openEditor() {
+        isEditing = true;
+        isTesting = false;
+        document.getElementById('win-overlay').style.display = 'none';
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'none';
+        document.getElementById('editor-ui').style.display = 'flex';
+        
+        // Initialize editor grid if empty
+        if (editorGrid.length === 0) {
+            editorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
+            editorBoxes = [];
+            editorPlayer = { x: 1, y: 1 };
+        }
+        
+        resizeEditorCanvas();
+    }
+
+    function testLevel() {
+        if (!isPlayerEnclosed(editorGrid, EDITOR_WIDTH, EDITOR_HEIGHT, editorPlayer.x, editorPlayer.y)) {
+            showEnclosureWarning("Return to Level Editor");
+            return;
+        }
+        // Serialize current editor state
+        let walls = [], switches = [], boxesStr = [];
+        for (let x = 0; x < EDITOR_WIDTH; x++) {
+            for (let y = 0; y < EDITOR_HEIGHT; y++) {
+                const coord = `${x + 1}${String.fromCharCode(65 + y)}`;
+                if (editorGrid[x][y] === 'wall') walls.push(coord);
+                if (editorGrid[x][y] === 'switch') switches.push(coord);
+            }
+        }
+        editorBoxes.forEach(b => {
+            boxesStr.push(`${b.x + 1}${String.fromCharCode(65 + b.y)}`);
+        });
+        const playerStr = `${editorPlayer.x + 1}${String.fromCharCode(65 + editorPlayer.y)}`;
+
+        testLevelData = `Walls: ${walls.join(', ')}\n` +
+            `Boxes: ${boxesStr.join(', ')}\n` +
+            `Switches: ${switches.join(', ')}\n` +
+            `Player: ${playerStr}`;
+
+        isEditing = false;
+        isTesting = true;
+        isWinning = false;
+        document.getElementById('win-overlay').style.display = 'none';
+        document.getElementById('editor-ui').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'flex';
+        document.getElementById('gameCanvas').style.display = 'block';
+        document.getElementById('back-to-menu-btn').style.display = 'none';
+        document.getElementById('back-to-editor-btn').style.display = 'inline-block';
+        document.getElementById('level-title').innerText = "Testing Level...";
+        
+        if (isMobile) {
+            document.getElementById('mobile-controls').style.display = 'flex';
+            document.getElementById('mobile-controls').style.flexDirection = 'column';
+            setTimeout(fitCamera, 100);
+        } else {
+            document.getElementById('mobile-controls').style.display = 'none';
+        }
+        
+        parseLevel(testLevelData);
+        fitCamera();
+    }
+
+    function returnToEditor() {
+        isTesting = false;
+        isEditing = true;
+        document.getElementById('win-overlay').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'none';
+        document.getElementById('editor-ui').style.display = 'flex';
+        document.getElementById('gameCanvas').style.display = 'none';
+        document.getElementById('mobile-controls').style.display = 'none';
+        resizeEditorCanvas();
+    }
+
+    let editorOffsetX = 0, editorOffsetY = 0;
+    let initialPinchDistance = null;
+    let initialPinchScale = 1;
+    let isPanning = false;
+    let lastTouchX = 0, lastTouchY = 0;
+
+    function resizeEditorCanvas(isUserInteraction = false) {
+        // Temporarily show editor-ui to get accurate offsets if it's hidden,
+        // but it's usually called when it's already displayed.
+        const editorUi = document.getElementById('editor-ui');
+        const wasHidden = editorUi.style.display === 'none' || editorUi.style.display === '';
+        if (wasHidden) editorUi.style.display = 'flex';
+
+        // Calculate available space for the canvas, accounting for the left and right sidebars
+        const controlsWidth = document.querySelector('.editor-controls').offsetWidth;
+        const paletteWidth = document.querySelector('.palette').offsetWidth;
+        const gap = window.innerWidth <= 600 ? 10 : 20; 
+        const viewWidth = window.innerWidth - controlsWidth - paletteWidth - (gap * 2) - 20;
+        const viewHeight = window.innerHeight - 20;
+        
+        // Use a fixed scale for the editor to avoid excessive zooming,
+        // but still allow it to fit on smaller screens if necessary.
+        const targetScale = 2; // Fixed comfortable scale
+        const fullGridWidth = EDITOR_WIDTH * GRID_SIZE;
+        const fullGridHeight = EDITOR_HEIGHT * GRID_SIZE;
+        
+        baseEditorScale = Math.min(targetScale, viewWidth / fullGridWidth, viewHeight / fullGridHeight);
+        editorScale = baseEditorScale * editorPinchScale;
+
+        editorCanvas.width = viewWidth;
+        editorCanvas.height = viewHeight;
+        editorCtx.imageSmoothingEnabled = false;
+        editorCanvas.style.display = 'inline-block';
+
+        // Center the 26x26 grid itself if it's not a user interaction (like window resize or initial open)
+        if (!isUserInteraction) {
+            editorOffsetX = (viewWidth / editorScale - fullGridWidth) / 2;
+            editorOffsetY = (viewHeight / editorScale - fullGridHeight) / 2;
+        }
+
+        if (wasHidden) editorUi.style.display = 'none';
+    }
+
+    function initEditorPinchZoom() {
+        // Events are now handled in initGame to coordinate between panning and drawing
+    }
+
+    // Call this in initGame or openEditor
+    // We'll call it in initGame where other canvas listeners are setup.
+
+    function selectTool(tool) {
+        currentTool = tool;
+        document.querySelectorAll('.palette-item').forEach(el => el.classList.remove('selected'));
+        document.getElementById(`p-${tool}`).classList.add('selected');
+    }
+
+    function handleEditorClick(e) {
+        // Prevent drawing when pinching or panning
+        if (isPanning || initialPinchDistance) return;
+        if (e.touches && e.touches.length > 1) return;
+        
+        // On mobile, if zoomed in, we assume single touch move is panning, not drawing.
+        // Taps (touchstart/touchend or mousedown without move) should still place blocks.
+        if (editorPinchScale > 1 && (e.type === 'touchmove' || e.type === 'mousemove')) return;
+        
+        const rect = editorCanvas.getBoundingClientRect();
+        // Support both mouse and touch events
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const mouseX = clientX - rect.left;
+        const mouseY = clientY - rect.top;
+        
+        // Convert to grid coordinates using scale and offset
+        const x = Math.floor(mouseX / (GRID_SIZE * editorScale) - editorOffsetX / GRID_SIZE);
+        const y = Math.floor(mouseY / (GRID_SIZE * editorScale) - editorOffsetY / GRID_SIZE);
+
+        if (x < 0 || x >= EDITOR_WIDTH || y < 0 || y >= EDITOR_HEIGHT) return;
+
+        if (currentTool === 'wall') {
+            editorGrid[x][y] = 'wall';
+            editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+        } else if (currentTool === 'box') {
+            editorGrid[x][y] = null;
+            if (!editorBoxes.some(b => b.x === x && b.y === y)) {
+                editorBoxes.push({x, y});
+            }
+        } else if (currentTool === 'switch') {
+            editorGrid[x][y] = 'switch';
+            editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+        } else if (currentTool === 'player') {
+            editorGrid[x][y] = null;
+            editorPlayer = {x, y};
+            editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+        } else if (currentTool === 'floor') {
+            editorGrid[x][y] = null;
+            editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+        }
+    }
+
+    async function saveLevel() {
+        if (!isPlayerEnclosed(editorGrid, EDITOR_WIDTH, EDITOR_HEIGHT, editorPlayer.x, editorPlayer.y)) {
+            showEnclosureWarning("Return to Level Editor");
+            return;
+        }
+        // Serialize level
+        let walls = [], switches = [], boxesStr = [];
+        for (let x = 0; x < EDITOR_WIDTH; x++) {
+            for (let y = 0; y < EDITOR_HEIGHT; y++) {
+                const coord = `${x + 1}${String.fromCharCode(65 + y)}`;
+                if (editorGrid[x][y] === 'wall') walls.push(coord);
+                if (editorGrid[x][y] === 'switch') switches.push(coord);
+            }
+        }
+        editorBoxes.forEach(b => {
+            boxesStr.push(`${b.x + 1}${String.fromCharCode(65 + b.y)}`);
+        });
+        const playerStr = `${editorPlayer.x + 1}${String.fromCharCode(65 + editorPlayer.y)}`;
+
+        const levelData = `Walls: ${walls.join(', ')}\n` +
+            `Boxes: ${boxesStr.join(', ')}\n` +
+            `Switches: ${switches.join(', ')}\n` +
+            `Player: ${playerStr}`;
+
+        // Update local levels array
+        levels.push({
+            name: `Level ${levels.length + 1}`,
+            data: levelData
+        });
+
+        // Trigger Download
+        downloadLevelsFile();
+
+        // Immediate Import (Update UI and Return to Menu)
+        createLevelMenu();
+        showMenu();
+        alert('Level added to your session and downloaded!');
+    }
+
+
+    function downloadLevelsFile() {
+        const allLevelsText = levels.map((l, i) => `Level ${i + 1}:\n${l.data}`).join('\n\n');
+        const blob = new Blob([allLevelsText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'level.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function clearEditorGrid() {
+        if (confirm('Are you sure you want to clear the level? This will remove everything except the player.')) {
+            editorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
+            editorBoxes = [];
+            // player remains at current position
+        }
+    }
+
+    async function deleteCurrentLevel() {
+        const levelIdx = prompt(`Enter level number to delete (1-${levels.length}):`);
+        if (!levelIdx) return;
+        const idx = parseInt(levelIdx) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= levels.length) {
+            alert('Invalid level number');
+            return;
+        }
+
+        if (confirm(`Are you sure you want to delete Level ${idx + 1}?`)) {
+            levels.splice(idx, 1);
+            // Re-index levels
+            const allLevelsText = levels.map((l, i) => `Level ${i + 1}:\n${l.data}`).join('\n\n');
+            
+            alert('Level deleted from session!');
+            
+            // Reload levels from serialized text to ensure consistency
+            const newLevels = [];
+            const blocks = allLevelsText.split(/Level \d+:/i).filter(b => b.trim());
+            blocks.forEach((block, index) => {
+                newLevels.push({
+                    name: `Level ${index + 1}`,
+                    data: block.trim()
+                });
+            });
+            levels.length = 0;
+            levels.push(...newLevels);
+            createLevelMenu();
+            showMenu();
+        }
+    }
+
+    function restartLevel() {
+        isWinning = false;
+        document.getElementById('win-overlay').style.display = 'none';
+        if (isTesting) {
+            parseLevel(testLevelData);
+            fitCamera();
+        } else {
+            startLevel(currentLevelIndex);
+        }
+    }
+
+    function nextLevel() {
+        if (currentLevelIndex < levels.length - 1) {
+            startLevel(currentLevelIndex + 1);
+        }
+    }
+
+    function previousLevel() {
+        if (currentLevelIndex > 0) {
+            startLevel(currentLevelIndex - 1);
+        }
+    }
+
+    function replayLevel() {
+        restartLevel();
+    }
+
+    function parseLevel(text) {
+        const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l);
+        let walls = [], tempBoxes = [], tempSwitches = [], playerPos = null;
+        let usedCols = 1, usedRows = 1;
+
+        for (const line of lines) {
+            const parts = line.split(':');
+            if (parts.length < 2) continue;
+            const type = parts[0].trim();
+            const coordsStr = parts[1].trim();
+
+            const coords = coordsStr.split(',').map(c => c.trim().toUpperCase())
+                .filter(c => c.length >= 2 && /^\d+[A-Z]$/.test(c))
+                .map(c => {
+                    const letter = c.slice(-1);
+                    const num = parseInt(c.slice(0, -1), 10);
+                    const col = num - 1; // 0-based
+                    const row = letter.charCodeAt(0) - 'A'.charCodeAt(0);
+                    if (col < 0 || col >= MAX_COL || row < 0 || row >= MAX_ROW) return null;
+                    usedCols = Math.max(usedCols, col + 1);
+                    usedRows = Math.max(usedRows, row + 1);
+                    return {x: col, y: row};
+                }).filter(Boolean);
+
+            const lowerType = type.toLowerCase();
+            if (lowerType === 'walls') walls = coords;
+            else if (lowerType === 'boxes') tempBoxes = coords;
+            else if (lowerType === 'switches') tempSwitches = coords;
+            else if (lowerType === 'player' && coords.length > 0) playerPos = coords[0];
+        }
+
+        width = Math.min(usedCols, MAX_COL);
+        height = Math.min(usedRows, MAX_ROW);
+
+        // Init grid as empty
+        grid = Array.from({length: width}, () => Array(height).fill(null));
+
+        // Place walls
+        walls.forEach(pos => {
+            grid[pos.x][pos.y] = 'wall';
+        });
+
+        // Place switches
+        tempSwitches.forEach(pos => {
+            grid[pos.x][pos.y] = 'switch';
+        });
+
+        // Place boxes
+        boxes = tempBoxes;
+
+        // Place player
+        if (playerPos) {
+            player.x = playerPos.x;
+            player.y = playerPos.y;
+            player.facing = 'down';
+        }
+    }
+
+    function isWall(x, y) {
+        if (x < 0 || x >= width || y < 0 || y >= height) return true;
+        return grid[x][y] === 'wall';
+    }
+
+    function isBoxAt(x, y) {
+        return boxes.some(b => b.x === x && b.y === y);
+    }
+    
+
+    let offsetX = 0, offsetY = 0;
+
+    function fitCamera() {
+        const container = document.getElementById('game-canvas-container');
+        const viewWidth = container.offsetWidth;
+        const viewHeight = container.offsetHeight;
+        
+        // Find the bounding box of the geometry (walls, switches, boxes, player)
+        let minX = width, minY = height, maxX = -1, maxY = -1;
+        let hasContent = false;
+
+        for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+                if (grid[x][y] === 'wall' || grid[x][y] === 'switch') {
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                    hasContent = true;
+                }
+            }
+        }
+        boxes.forEach(b => {
+            minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x); maxY = Math.max(maxY, b.y);
+            hasContent = true;
+        });
+        minX = Math.min(minX, player.x); minY = Math.min(minY, player.y);
+        maxX = Math.max(maxX, player.x); maxY = Math.max(maxY, player.y);
+        hasContent = true;
+
+        if (!hasContent) {
+            minX = 0; minY = 0; maxX = width - 1; maxY = height - 1;
+        }
+
+        const geoWidth = (maxX - minX + 1) * GRID_SIZE;
+        const geoHeight = (maxY - minY + 1) * GRID_SIZE;
+
+        const margin = isMobile ? 0.98 : 0.9;
+        scale = Math.min(viewWidth / geoWidth * margin, viewHeight / geoHeight * margin);
+
+        canvas.width = viewWidth;
+        canvas.height = viewHeight;
+        ctx.imageSmoothingEnabled = false;
+
+        // Center the geometry on the canvas
+        offsetX = (viewWidth / scale - geoWidth) / 2 - minX * GRID_SIZE;
+        offsetY = (viewHeight / scale - geoHeight) / 2 - minY * GRID_SIZE;
+    }
+
+    function handleMobileMove(dir) {
+        handleInput({ key: dir });
+    }
+
+    function handleInput(e) {
+        if (isEditing) return;
+        if (document.getElementById('gameCanvas').style.display === 'none') return;
+        if (document.getElementById('win-overlay').style.display === 'block') return;
+        let dir = null;
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'up') dir = 'up';
+        if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'down') dir = 'down';
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'left') dir = 'left';
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'right') dir = 'right';
+
+        if (dir) {
+            player.facing = dir;
+            const { dx, dy } = directions[dir];
+            const nx = player.x + dx;
+            const ny = player.y + dy;
+
+            // Always check win on move
+            setTimeout(() => { checkWin(); }, 500);
+
+            // Check if can move
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height || isWall(nx, ny)) return;
+
+            // Check box
+            const boxIndex = boxes.findIndex(b => b.x === nx && b.y === ny);
+            if (boxIndex !== -1) {
+                const boxNx = nx + dx;
+                const boxNy = ny + dy;
+                if (boxNx < 0 || boxNx >= width || boxNy < 0 || boxNy >= height || isWall(boxNx, boxNy) || isBoxAt(boxNx, boxNy)) return;
+                // Push box
+                boxes[boxIndex].x = boxNx;
+                boxes[boxIndex].y = boxNy;
+            }
+
+            // Move player
+            player.x = nx;
+            player.y = ny;
+        }
+    }
+
+    function checkWin() {
+        // Level is completed when ALL switches are covered by boxes
+        // Find all switch positions
+        const switches = [];
+        for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+                if (grid[x][y] === 'switch') {
+                    switches.push({x, y});
+                }
+            }
+        }
+
+        const allSwitchesCovered = switches.every(s => 
+            boxes.some(b => b.x === s.x && b.y === s.y)
+        );
+
+        if (allSwitchesCovered && switches.length > 0) {
+            if (isWinning) return;
+            isWinning = true;
+
+            const overlay = document.getElementById('win-overlay');
+            const message = document.getElementById('win-message');
+            const nextBtn = document.getElementById('next-lvl-btn');
+            const replayBtn = document.getElementById('replay-lvl-btn');
+            const prevBtn = document.getElementById('prev-lvl-btn');
+            const menuBtn = document.getElementById('win-menu-btn');
+            const editorBtn = document.getElementById('win-editor-btn');
+
+            if (isTesting) {
+                message.innerText = "Test complete!";
+                nextBtn.style.display = 'none';
+                replayBtn.style.display = 'none';
+                prevBtn.style.display = 'none';
+                menuBtn.innerText = "Return to Main Menu";
+                menuBtn.style.display = 'inline-block';
+                editorBtn.innerText = "Return to Level Editor";
+                editorBtn.style.display = 'inline-block';
+            } else {
+                message.innerText = "You win!";
+                nextBtn.style.display = (currentLevelIndex < levels.length - 1) ? 'inline-block' : 'none';
+                replayBtn.style.display = 'inline-block';
+                prevBtn.style.display = (currentLevelIndex > 0) ? 'inline-block' : 'none';
+                menuBtn.innerText = "Main Menu";
+                menuBtn.style.display = 'inline-block';
+                editorBtn.style.display = 'none';
+            }
+            overlay.style.display = 'block';
+        }
+    }
+
+    function gameLoop() {
+        if (isEditing) drawEditor();
+        else draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function drawEditor() {
+        if (document.getElementById('editor-ui').style.display === 'none') return;
+        editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
+        editorCtx.save();
+        editorCtx.scale(editorScale, editorScale);
+        editorCtx.translate(editorOffsetX, editorOffsetY);
+
+        // Draw a light grid background for the 26x26 editor area
+        editorCtx.strokeStyle = '#333';
+        editorCtx.lineWidth = 0.5;
+        for (let x = 0; x <= EDITOR_WIDTH; x++) {
+            editorCtx.beginPath();
+            editorCtx.moveTo(x * GRID_SIZE, 0);
+            editorCtx.lineTo(x * GRID_SIZE, EDITOR_HEIGHT * GRID_SIZE);
+            editorCtx.stroke();
+        }
+        for (let y = 0; y <= EDITOR_HEIGHT; y++) {
+            editorCtx.beginPath();
+            editorCtx.moveTo(0, y * GRID_SIZE);
+            editorCtx.lineTo(EDITOR_WIDTH * GRID_SIZE, y * GRID_SIZE);
+            editorCtx.stroke();
+        }
+
+        // Flood fill to determine floor areas in editor
+        const visited = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(false));
+        const floodFromEdges = (w, h, isWallFn, fillFn) => {
+            for (let y = 0; y < h; y++) {
+                if (!isWallFn(0, y)) fillFn(0, y);
+                if (!isWallFn(w - 1, y)) fillFn(w - 1, y);
+            }
+            for (let x = 0; x < w; x++) {
+                if (!isWallFn(x, 0)) fillFn(x, 0);
+                if (!isWallFn(x, h - 1)) fillFn(x, h - 1);
+            }
+        };
+        const floodFillFn = (x, y) => {
+            const stack = [[x, y]];
+            while (stack.length > 0) {
+                const [cx, cy] = stack.pop();
+                if (cx < 0 || cx >= EDITOR_WIDTH || cy < 0 || cy >= EDITOR_HEIGHT || 
+                    editorGrid[cx][cy] === 'wall' || visited[cx][cy]) continue;
+                visited[cx][cy] = true;
+                stack.push([cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]);
+            }
+        };
+        floodFromEdges(EDITOR_WIDTH, EDITOR_HEIGHT, (x, y) => editorGrid[x][y] === 'wall', floodFillFn);
+
+        // Draw floor in enclosed areas
+        for (let x = 0; x < EDITOR_WIDTH; x++) {
+            for (let y = 0; y < EDITOR_HEIGHT; y++) {
+                if (!visited[x][y] || editorGrid[x][y] === 'wall') {
+                    // Check if it's within the "bounds" of placed objects to avoid drawing floor in infinite void?
+                    // Actually, the requirement says "completely sealed by walls".
+                    // If it's not visited by flood fill from edges, it's sealed (or it IS a wall).
+                    if (editorGrid[x][y] !== 'wall') {
+                        editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                    }
+                }
+            }
+        }
+
+        // Draw grid assets
+        for (let x = 0; x < EDITOR_WIDTH; x++) {
+            for (let y = 0; y < EDITOR_HEIGHT; y++) {
+                const cell = editorGrid[x][y];
+                if (cell === 'wall') {
+                    // Draw floor under wall too? Usually yes for SimpleSokoban
+                    editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                    editorCtx.drawImage(images.wall, x * GRID_SIZE, y * GRID_SIZE);
+                }
+                if (cell === 'switch') {
+                    editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                    editorCtx.drawImage(images.switch, x * GRID_SIZE, y * GRID_SIZE);
+                }
+            }
+        }
+
+        // Draw boxes
+        editorBoxes.forEach(b => {
+            // Only draw floor if it's in a sealed area (which it should be if placed by user, but let's be consistent)
+            if (!visited[b.x][b.y]) {
+                editorCtx.drawImage(images.floor, b.x * GRID_SIZE, b.y * GRID_SIZE);
+            }
+            editorCtx.drawImage(images.box, b.x * GRID_SIZE, b.y * GRID_SIZE);
+        });
+
+        // Draw player
+        if (!visited[editorPlayer.x][editorPlayer.y]) {
+            editorCtx.drawImage(images.floor, editorPlayer.x * GRID_SIZE, editorPlayer.y * GRID_SIZE);
+        }
+        editorCtx.drawImage(images.lookdown, editorPlayer.x * GRID_SIZE, editorPlayer.y * GRID_SIZE);
+
+        editorCtx.restore();
+    }
+
+    function draw() {
+        if (document.getElementById('gameCanvas').style.display === 'none') return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.scale(scale, scale);
+        ctx.translate(offsetX, offsetY);
+
+        // Flood fill to determine floor areas in game
+        const visited = Array.from({length: width}, () => Array(height).fill(false));
+        const floodFromEdges = (w, h, isWallFn, fillFn) => {
+            for (let y = 0; y < h; y++) {
+                if (!isWallFn(0, y)) fillFn(0, y);
+                if (!isWallFn(w - 1, y)) fillFn(w - 1, y);
+            }
+            for (let x = 0; x < w; x++) {
+                if (!isWallFn(x, 0)) fillFn(x, 0);
+                if (!isWallFn(x, h - 1)) fillFn(x, h - 1);
+            }
+        };
+        const floodFillFn = (x, y) => {
+            const stack = [[x, y]];
+            while (stack.length > 0) {
+                const [cx, cy] = stack.pop();
+                if (cx < 0 || cx >= width || cy < 0 || cy >= height || 
+                    grid[cx][cy] === 'wall' || visited[cx][cy]) continue;
+                visited[cx][cy] = true;
+                stack.push([cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]);
+            }
+        };
+        floodFromEdges(width, height, (x, y) => grid[x][y] === 'wall', floodFillFn);
+
+        // Draw floor in enclosed areas
+        for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+                if (!visited[x][y] && grid[x][y] !== 'wall') {
+                    ctx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                }
+            }
+        }
+
+        // Draw grid assets
+        for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+                const cell = grid[x][y];
+                if (cell === 'wall') {
+                    ctx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                    ctx.drawImage(images.wall, x * GRID_SIZE, y * GRID_SIZE);
+                }
+                if (cell === 'switch') {
+                    // Floor already drawn above
+                    ctx.drawImage(images.switch, x * GRID_SIZE, y * GRID_SIZE);
+                }
+            }
+        }
+
+        // Draw boxes
+        boxes.forEach(b => {
+            ctx.drawImage(images.box, b.x * GRID_SIZE, b.y * GRID_SIZE);
+        });
+
+        // Draw player
+        const playerImgKey = directions[player.facing].look;
+        ctx.drawImage(images[playerImgKey], player.x * GRID_SIZE, player.y * GRID_SIZE);
+
+        ctx.restore();
+    }
+</script>
+</body>
+</html>
