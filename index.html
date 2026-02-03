@@ -134,12 +134,11 @@
     </div>
 </div>
 <script>
-    // Constants
+
     const GRID_SIZE = 16;
     const MAX_COL = 26;
     const MAX_ROW = 26;
 
-    // Preload all images
     const images = {
         floor: new Image(),
         wall: new Image(),
@@ -160,18 +159,16 @@
     images.lookright.src = 'lookright.png';
     images.lookup.src = 'lookup.png';
 
-    // Level data
     const levels = [];
     let currentLevelIndex = 0;
 
-    // Game state
     let canvas, ctx;
     let editorCanvas, editorCtx;
-    let grid = [];  // 2D array: 'wall', 'floor', 'switch', null
-    let boxes = []; // array of {x, y}
+    let grid = [];
+    let boxes = [];
     let player = { x: 0, y: 0, facing: 'down' };
     let width = 0, height = 0;
-    let scale = 4;  // Zoom level (adjust if needed)
+    let scale = 4;
     let editorScale = 2;
     let baseEditorScale = 2;
     let editorPinchScale = 1;
@@ -182,13 +179,11 @@
     let isMobile = false;
     let testLevelData = null;
 
-    // Detect mobile device
     function detectMobile() {
         isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window);
     }
     detectMobile();
 
-    // Attach mobile control events
     function initMobileControls() {
         const container = document.getElementById('mobile-controls');
         const mobileBtns = document.querySelectorAll('.mobile-btn');
@@ -217,17 +212,14 @@
         });
     }
 
-    // Call init when DOM is ready
     window.addEventListener('DOMContentLoaded', initMobileControls);
 
-    // Editor state (26x26 default for new levels)
     const EDITOR_WIDTH = 26;
     const EDITOR_HEIGHT = 26;
     let editorGrid = [];
     let editorBoxes = [];
     let editorPlayer = { x: 1, y: 1 };
 
-    // Directions
     const directions = {
         up: { dx: 0, dy: -1, look: 'lookup' },
         down: { dx: 0, dy: 1, look: 'lookdown' },
@@ -259,9 +251,6 @@
         };
         floodFromEdges(w, h, (x, y) => gridArray[x][y] === 'wall', floodFillFn);
         
-        // If the player's position was NOT visited by the flood fill from edges, 
-        // it means they are in an enclosed space (or they are a wall, which shouldn't happen).
-        // Also check if the player's position is actually inside the grid.
         if (px < 0 || px >= w || py < 0 || py >= h) return false;
         return !visited[px][py] && gridArray[px][py] !== 'wall';
     }
@@ -293,7 +282,6 @@
         overlay.style.display = 'block';
     }
 
-    // Init when all images loaded
     let loadedImages = 0;
     Object.values(images).forEach(img => {
         img.onload = () => {
@@ -312,7 +300,6 @@
         editorCtx = editorCanvas.getContext('2d');
         editorCtx.imageSmoothingEnabled = false;
 
-        // Setup palette icons
         document.getElementById('p-wall').style.backgroundImage = `url(${images.wall.src})`;
         document.getElementById('p-box').style.backgroundImage = `url(${images.box.src})`;
         document.getElementById('p-switch').style.backgroundImage = `url(${images.switch.src})`;
@@ -321,16 +308,16 @@
         selectTool('wall');
 
         editorCanvas.addEventListener('mousedown', (e) => {
-            if (e.button === 0) { // Left click
+            if (e.button === 0) {
                 isPanning = false;
-                initialPinchDistance = null; // Reset pinch state on new interaction
+                initialPinchDistance = null;
                 lastTouchX = e.clientX;
                 lastTouchY = e.clientY;
                 handleEditorClick(e);
             }
         });
         editorCanvas.addEventListener('mousemove', (e) => {
-            if (e.buttons === 1) { // Left button held
+            if (e.buttons === 1) {
                 if (editorPinchScale > 1) {
                     isPanning = true;
                     const dx = (e.clientX - lastTouchX) / editorScale;
@@ -355,7 +342,7 @@
                 initialPinchScale = editorPinchScale;
             } else if (e.touches.length === 1) {
                 isPanning = false;
-                initialPinchDistance = null; // Reset pinch state
+                initialPinchDistance = null;
                 lastTouchX = e.touches[0].clientX;
                 lastTouchY = e.touches[0].clientY;
             }
@@ -388,7 +375,7 @@
         }, { passive: false });
         editorCanvas.addEventListener('touchend', (e) => {
             if (e.touches.length === 0 && !isPanning && !initialPinchDistance) {
-                // It was a tap
+
                 handleEditorClick(e.changedTouches[0]);
             }
             if (e.touches.length < 2) {
@@ -396,7 +383,7 @@
             }
         }, { passive: false });
         
-        // Setup pinch zoom for editor
+
         initEditorPinchZoom();
         
         const fallbackLevels = `Level 1:
@@ -491,7 +478,7 @@ Player: 10G`;
         const reader = new FileReader();
         reader.onload = function(e) {
             const content = e.target.result;
-            levels.length = 0; // Clear current levels
+            levels.length = 0;
             parseLevels(content);
             if (levels.length > 0) {
                 createLevelMenu();
@@ -566,7 +553,7 @@ Player: 10G`;
         document.getElementById('game-ui').style.display = 'none';
         document.getElementById('editor-ui').style.display = 'flex';
         
-        // Initialize editor grid if empty
+
         if (editorGrid.length === 0) {
             editorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
             editorBoxes = [];
@@ -581,7 +568,7 @@ Player: 10G`;
             showEnclosureWarning("Return to Level Editor");
             return;
         }
-        // Serialize current editor state
+
         let walls = [], switches = [], boxesStr = [];
         for (let x = 0; x < EDITOR_WIDTH; x++) {
             for (let y = 0; y < EDITOR_HEIGHT; y++) {
@@ -641,22 +628,17 @@ Player: 10G`;
     let lastTouchX = 0, lastTouchY = 0;
 
     function resizeEditorCanvas(isUserInteraction = false) {
-        // Temporarily show editor-ui to get accurate offsets if it's hidden,
-        // but it's usually called when it's already displayed.
         const editorUi = document.getElementById('editor-ui');
         const wasHidden = editorUi.style.display === 'none' || editorUi.style.display === '';
         if (wasHidden) editorUi.style.display = 'flex';
 
-        // Calculate available space for the canvas, accounting for the left and right sidebars
         const controlsWidth = document.querySelector('.editor-controls').offsetWidth;
         const paletteWidth = document.querySelector('.palette').offsetWidth;
         const gap = window.innerWidth <= 600 ? 10 : 20; 
         const viewWidth = window.innerWidth - controlsWidth - paletteWidth - (gap * 2) - 20;
         const viewHeight = window.innerHeight - 20;
-        
-        // Use a fixed scale for the editor to avoid excessive zooming,
-        // but still allow it to fit on smaller screens if necessary.
-        const targetScale = 2; // Fixed comfortable scale
+
+        const targetScale = 2;
         const fullGridWidth = EDITOR_WIDTH * GRID_SIZE;
         const fullGridHeight = EDITOR_HEIGHT * GRID_SIZE;
         
@@ -668,7 +650,6 @@ Player: 10G`;
         editorCtx.imageSmoothingEnabled = false;
         editorCanvas.style.display = 'inline-block';
 
-        // Center the 26x26 grid itself if it's not a user interaction (like window resize or initial open)
         if (!isUserInteraction) {
             editorOffsetX = (viewWidth / editorScale - fullGridWidth) / 2;
             editorOffsetY = (viewHeight / editorScale - fullGridHeight) / 2;
@@ -678,11 +659,8 @@ Player: 10G`;
     }
 
     function initEditorPinchZoom() {
-        // Events are now handled in initGame to coordinate between panning and drawing
     }
 
-    // Call this in initGame or openEditor
-    // We'll call it in initGame where other canvas listeners are setup.
 
     function selectTool(tool) {
         currentTool = tool;
@@ -691,23 +669,18 @@ Player: 10G`;
     }
 
     function handleEditorClick(e) {
-        // Prevent drawing when pinching or panning
         if (isPanning || initialPinchDistance) return;
         if (e.touches && e.touches.length > 1) return;
         
-        // On mobile, if zoomed in, we assume single touch move is panning, not drawing.
-        // Taps (touchstart/touchend or mousedown without move) should still place blocks.
         if (editorPinchScale > 1 && (e.type === 'touchmove' || e.type === 'mousemove')) return;
         
         const rect = editorCanvas.getBoundingClientRect();
-        // Support both mouse and touch events
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
         const mouseX = clientX - rect.left;
         const mouseY = clientY - rect.top;
         
-        // Convert to grid coordinates using scale and offset
         const x = Math.floor(mouseX / (GRID_SIZE * editorScale) - editorOffsetX / GRID_SIZE);
         const y = Math.floor(mouseY / (GRID_SIZE * editorScale) - editorOffsetY / GRID_SIZE);
 
@@ -739,7 +712,6 @@ Player: 10G`;
             showEnclosureWarning("Return to Level Editor");
             return;
         }
-        // Serialize level
         let walls = [], switches = [], boxesStr = [];
         for (let x = 0; x < EDITOR_WIDTH; x++) {
             for (let y = 0; y < EDITOR_HEIGHT; y++) {
@@ -758,16 +730,13 @@ Player: 10G`;
             `Switches: ${switches.join(', ')}\n` +
             `Player: ${playerStr}`;
 
-        // Update local levels array
         levels.push({
             name: `Level ${levels.length + 1}`,
             data: levelData
         });
 
-        // Trigger Download
         downloadLevelsFile();
 
-        // Immediate Import (Update UI and Return to Menu)
         createLevelMenu();
         showMenu();
         alert('Level added to your session and downloaded!');
@@ -791,7 +760,6 @@ Player: 10G`;
         if (confirm('Are you sure you want to clear the level? This will remove everything except the player.')) {
             editorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
             editorBoxes = [];
-            // player remains at current position
         }
     }
 
@@ -806,12 +774,10 @@ Player: 10G`;
 
         if (confirm(`Are you sure you want to delete Level ${idx + 1}?`)) {
             levels.splice(idx, 1);
-            // Re-index levels
             const allLevelsText = levels.map((l, i) => `Level ${i + 1}:\n${l.data}`).join('\n\n');
             
             alert('Level deleted from session!');
             
-            // Reload levels from serialized text to ensure consistency
             const newLevels = [];
             const blocks = allLevelsText.split(/Level \d+:/i).filter(b => b.trim());
             blocks.forEach((block, index) => {
@@ -870,7 +836,7 @@ Player: 10G`;
                 .map(c => {
                     const letter = c.slice(-1);
                     const num = parseInt(c.slice(0, -1), 10);
-                    const col = num - 1; // 0-based
+                    const col = num - 1;
                     const row = letter.charCodeAt(0) - 'A'.charCodeAt(0);
                     if (col < 0 || col >= MAX_COL || row < 0 || row >= MAX_ROW) return null;
                     usedCols = Math.max(usedCols, col + 1);
@@ -888,23 +854,18 @@ Player: 10G`;
         width = Math.min(usedCols, MAX_COL);
         height = Math.min(usedRows, MAX_ROW);
 
-        // Init grid as empty
         grid = Array.from({length: width}, () => Array(height).fill(null));
 
-        // Place walls
         walls.forEach(pos => {
             grid[pos.x][pos.y] = 'wall';
         });
 
-        // Place switches
         tempSwitches.forEach(pos => {
             grid[pos.x][pos.y] = 'switch';
         });
 
-        // Place boxes
         boxes = tempBoxes;
 
-        // Place player
         if (playerPos) {
             player.x = playerPos.x;
             player.y = playerPos.y;
@@ -929,7 +890,6 @@ Player: 10G`;
         const viewWidth = container.offsetWidth;
         const viewHeight = container.offsetHeight;
         
-        // Find the bounding box of the geometry (walls, switches, boxes, player)
         let minX = width, minY = height, maxX = -1, maxY = -1;
         let hasContent = false;
 
@@ -967,7 +927,6 @@ Player: 10G`;
         canvas.height = viewHeight;
         ctx.imageSmoothingEnabled = false;
 
-        // Center the geometry on the canvas
         offsetX = (viewWidth / scale - geoWidth) / 2 - minX * GRID_SIZE;
         offsetY = (viewHeight / scale - geoHeight) / 2 - minY * GRID_SIZE;
     }
@@ -992,32 +951,25 @@ Player: 10G`;
             const nx = player.x + dx;
             const ny = player.y + dy;
 
-            // Always check win on move
             setTimeout(() => { checkWin(); }, 500);
 
-            // Check if can move
             if (nx < 0 || nx >= width || ny < 0 || ny >= height || isWall(nx, ny)) return;
 
-            // Check box
             const boxIndex = boxes.findIndex(b => b.x === nx && b.y === ny);
             if (boxIndex !== -1) {
                 const boxNx = nx + dx;
                 const boxNy = ny + dy;
                 if (boxNx < 0 || boxNx >= width || boxNy < 0 || boxNy >= height || isWall(boxNx, boxNy) || isBoxAt(boxNx, boxNy)) return;
-                // Push box
                 boxes[boxIndex].x = boxNx;
                 boxes[boxIndex].y = boxNy;
             }
 
-            // Move player
             player.x = nx;
             player.y = ny;
         }
     }
 
     function checkWin() {
-        // Level is completed when ALL switches are covered by boxes
-        // Find all switch positions
         const switches = [];
         for (let x = 0; x < width; x++) {
             for (let y = 0; y < height; y++) {
@@ -1078,7 +1030,6 @@ Player: 10G`;
         editorCtx.scale(editorScale, editorScale);
         editorCtx.translate(editorOffsetX, editorOffsetY);
 
-        // Draw a light grid background for the 26x26 editor area
         editorCtx.strokeStyle = '#333';
         editorCtx.lineWidth = 0.5;
         for (let x = 0; x <= EDITOR_WIDTH; x++) {
@@ -1094,7 +1045,6 @@ Player: 10G`;
             editorCtx.stroke();
         }
 
-        // Flood fill to determine floor areas in editor
         const visited = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(false));
         const floodFromEdges = (w, h, isWallFn, fillFn) => {
             for (let y = 0; y < h; y++) {
@@ -1118,13 +1068,9 @@ Player: 10G`;
         };
         floodFromEdges(EDITOR_WIDTH, EDITOR_HEIGHT, (x, y) => editorGrid[x][y] === 'wall', floodFillFn);
 
-        // Draw floor in enclosed areas
         for (let x = 0; x < EDITOR_WIDTH; x++) {
             for (let y = 0; y < EDITOR_HEIGHT; y++) {
                 if (!visited[x][y] || editorGrid[x][y] === 'wall') {
-                    // Check if it's within the "bounds" of placed objects to avoid drawing floor in infinite void?
-                    // Actually, the requirement says "completely sealed by walls".
-                    // If it's not visited by flood fill from edges, it's sealed (or it IS a wall).
                     if (editorGrid[x][y] !== 'wall') {
                         editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
                     }
@@ -1132,12 +1078,10 @@ Player: 10G`;
             }
         }
 
-        // Draw grid assets
         for (let x = 0; x < EDITOR_WIDTH; x++) {
             for (let y = 0; y < EDITOR_HEIGHT; y++) {
                 const cell = editorGrid[x][y];
                 if (cell === 'wall') {
-                    // Draw floor under wall too? Usually yes for SimpleSokoban
                     editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
                     editorCtx.drawImage(images.wall, x * GRID_SIZE, y * GRID_SIZE);
                 }
@@ -1148,16 +1092,13 @@ Player: 10G`;
             }
         }
 
-        // Draw boxes
         editorBoxes.forEach(b => {
-            // Only draw floor if it's in a sealed area (which it should be if placed by user, but let's be consistent)
             if (!visited[b.x][b.y]) {
                 editorCtx.drawImage(images.floor, b.x * GRID_SIZE, b.y * GRID_SIZE);
             }
             editorCtx.drawImage(images.box, b.x * GRID_SIZE, b.y * GRID_SIZE);
         });
 
-        // Draw player
         if (!visited[editorPlayer.x][editorPlayer.y]) {
             editorCtx.drawImage(images.floor, editorPlayer.x * GRID_SIZE, editorPlayer.y * GRID_SIZE);
         }
@@ -1173,7 +1114,6 @@ Player: 10G`;
         ctx.scale(scale, scale);
         ctx.translate(offsetX, offsetY);
 
-        // Flood fill to determine floor areas in game
         const visited = Array.from({length: width}, () => Array(height).fill(false));
         const floodFromEdges = (w, h, isWallFn, fillFn) => {
             for (let y = 0; y < h; y++) {
@@ -1197,7 +1137,6 @@ Player: 10G`;
         };
         floodFromEdges(width, height, (x, y) => grid[x][y] === 'wall', floodFillFn);
 
-        // Draw floor in enclosed areas
         for (let x = 0; x < width; x++) {
             for (let y = 0; y < height; y++) {
                 if (!visited[x][y] && grid[x][y] !== 'wall') {
@@ -1206,7 +1145,6 @@ Player: 10G`;
             }
         }
 
-        // Draw grid assets
         for (let x = 0; x < width; x++) {
             for (let y = 0; y < height; y++) {
                 const cell = grid[x][y];
@@ -1215,18 +1153,15 @@ Player: 10G`;
                     ctx.drawImage(images.wall, x * GRID_SIZE, y * GRID_SIZE);
                 }
                 if (cell === 'switch') {
-                    // Floor already drawn above
                     ctx.drawImage(images.switch, x * GRID_SIZE, y * GRID_SIZE);
                 }
             }
         }
 
-        // Draw boxes
         boxes.forEach(b => {
             ctx.drawImage(images.box, b.x * GRID_SIZE, b.y * GRID_SIZE);
         });
 
-        // Draw player
         const playerImgKey = directions[player.facing].look;
         ctx.drawImage(images[playerImgKey], player.x * GRID_SIZE, player.y * GRID_SIZE);
 
