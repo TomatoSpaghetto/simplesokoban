@@ -116,21 +116,26 @@
         </div>
     </div>
 </div>
-<div id="editor-ui">
+    <div id="editor-ui">
     <div class="editor-controls">
         <button class="btn" onclick="testLevel()">Test Level</button>
-        <button class="btn" onclick="clearEditorGrid()">Clear</button>
-        <button class="btn" onclick="saveLevel()">Download & Import</button>
+        <button class="btn" onclick="saveLevel()">Save & Download</button>
+        <button class="btn" onclick="document.getElementById('editor-file-input').click()">Load Level</button>
+        <input type="file" id="editor-file-input" accept=".txt" style="display: none;" onchange="loadLevelIntoEditor(this)">
+        <button class="btn" onclick="clearEditorGrid()">Clear Level</button>
         <button class="btn" onclick="deleteCurrentLevel()">Delete Level</button>
         <button class="btn" onclick="showMenu()">Back to Menu</button>
     </div>
     <canvas id="editorCanvas"></canvas>
     <div class="palette">
         <div class="palette-item" id="p-wall" onclick="selectTool('wall')" title="Wall"></div>
+        <div class="palette-item" id="p-icewall" onclick="selectTool('icewall')" title="Ice Wall"></div>
         <div class="palette-item" id="p-box" onclick="selectTool('box')" title="Box"></div>
         <div class="palette-item" id="p-switch" onclick="selectTool('switch')" title="Switch"></div>
         <div class="palette-item" id="p-player" onclick="selectTool('player')" title="Player"></div>
-        <div class="palette-item" id="p-floor" onclick="selectTool('floor')" title="Floor/Erase"></div>
+        <div class="palette-item" id="p-floor" onclick="selectTool('floor')" title="Floor"></div>
+        <div class="palette-item" id="p-icefloor" onclick="selectTool('icefloor')" title="Ice Floor"></div>
+        <div class="palette-item" id="p-erase" onclick="selectTool('erase')" title="Erase Floor"></div>
     </div>
 </div>
 <script>
@@ -141,7 +146,9 @@
 
     const images = {
         floor: new Image(),
+        icefloor: new Image(),
         wall: new Image(),
+        icewall: new Image(),
         box: new Image(),
         switch: new Image(),
         lookdown: new Image(),
@@ -151,7 +158,9 @@
     };
 
     images.floor.src = 'floor.png';
+    images.icefloor.src = 'icefloor.png';
     images.wall.src = 'wall.png';
+    images.icewall.src = 'icewall.png';
     images.box.src = 'box.png';
     images.switch.src = 'switch.png';
     images.lookdown.src = 'lookdown.png';
@@ -165,6 +174,7 @@
     let canvas, ctx;
     let editorCanvas, editorCtx;
     let grid = [];
+    let floorGrid = [];
     let boxes = [];
     let player = { x: 0, y: 0, facing: 'down' };
     let width = 0, height = 0;
@@ -217,6 +227,7 @@
     const EDITOR_WIDTH = 26;
     const EDITOR_HEIGHT = 26;
     let editorGrid = [];
+    let editorFloorGrid = [];
     let editorBoxes = [];
     let editorPlayer = { x: 1, y: 1 };
 
@@ -228,31 +239,36 @@
     };
 
     function isPlayerEnclosed(gridArray, w, h, px, py) {
-        const visited = Array.from({length: w}, () => Array(h).fill(false));
-        const floodFromEdges = (w, h, isWallFn, fillFn) => {
-            for (let y = 0; y < h; y++) {
+        if (!gridArray || gridArray.length === 0) return false;
+        const widthToUse = w || 1;
+        const heightToUse = h || 1;
+        const visited = Array.from({length: widthToUse}, () => Array(heightToUse).fill(false));
+        const floodFromEdges = (fw, fh, isWallFn, fillFn) => {
+            for (let y = 0; y < fh; y++) {
                 if (!isWallFn(0, y)) fillFn(0, y);
-                if (!isWallFn(w - 1, y)) fillFn(w - 1, y);
+                if (!isWallFn(fw - 1, y)) fillFn(fw - 1, y);
             }
-            for (let x = 0; x < w; x++) {
+            for (let x = 0; x < fw; x++) {
                 if (!isWallFn(x, 0)) fillFn(x, 0);
-                if (!isWallFn(x, h - 1)) fillFn(x, h - 1);
+                if (!isWallFn(x, fh - 1)) fillFn(x, fh - 1);
             }
         };
-        const floodFillFn = (x, y) => {
-            const stack = [[x, y]];
+        const floodFillFn = (startX, startY) => {
+            const stack = [[startX, startY]];
             while (stack.length > 0) {
                 const [cx, cy] = stack.pop();
-                if (cx < 0 || cx >= w || cy < 0 || cy >= h || 
-                    gridArray[cx][cy] === 'wall' || visited[cx][cy]) continue;
+                if (cx < 0 || cx >= widthToUse || cy < 0 || cy >= heightToUse || 
+                    !gridArray[cx] || gridArray[cx][cy] === 'wall' || gridArray[cx][cy] === 'icewall' || visited[cx][cy]) continue;
                 visited[cx][cy] = true;
                 stack.push([cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]);
             }
         };
-        floodFromEdges(w, h, (x, y) => gridArray[x][y] === 'wall', floodFillFn);
+        floodFromEdges(widthToUse, heightToUse, (x, y) => !gridArray[x] || gridArray[x][y] === 'wall' || gridArray[x][y] === 'icewall', (x, y) => {
+            if (!visited[x][y]) floodFillFn(x, y);
+        });
         
-        if (px < 0 || px >= w || py < 0 || py >= h) return false;
-        return !visited[px][py] && gridArray[px][py] !== 'wall';
+        if (px < 0 || px >= widthToUse || py < 0 || py >= heightToUse || !gridArray[px]) return false;
+        return !visited[px][py] && gridArray[px][py] !== 'wall' && gridArray[px][py] !== 'icewall';
     }
 
     function showEnclosureWarning(returnMode) {
@@ -283,10 +299,19 @@
     }
 
     let loadedImages = 0;
-    Object.values(images).forEach(img => {
+    const imageKeys = Object.keys(images);
+    imageKeys.forEach(key => {
+        const img = images[key];
         img.onload = () => {
             loadedImages++;
-            if (loadedImages === Object.keys(images).length) {
+            if (loadedImages === imageKeys.length) {
+                initGame();
+            }
+        };
+        img.onerror = () => {
+            console.error(`Failed to load image: ${img.src}`);
+            loadedImages++;
+            if (loadedImages === imageKeys.length) {
                 initGame();
             }
         };
@@ -301,10 +326,13 @@
         editorCtx.imageSmoothingEnabled = false;
 
         document.getElementById('p-wall').style.backgroundImage = `url(${images.wall.src})`;
+        document.getElementById('p-icewall').style.backgroundImage = `url(${images.icewall.src})`;
         document.getElementById('p-box').style.backgroundImage = `url(${images.box.src})`;
         document.getElementById('p-switch').style.backgroundImage = `url(${images.switch.src})`;
         document.getElementById('p-player').style.backgroundImage = `url(${images.lookdown.src})`;
         document.getElementById('p-floor').style.backgroundImage = `url(${images.floor.src})`;
+        document.getElementById('p-icefloor').style.backgroundImage = `url(${images.icefloor.src})`;
+        document.getElementById('p-erase').style.backgroundColor = `#000`;
         selectTool('wall');
 
         editorCanvas.addEventListener('mousedown', (e) => {
@@ -396,6 +424,8 @@ Level 2:
 Walls: 1A, 1B, 1C, 1D, 1E, 1F, 1G, 1H, 1I, 1J, 2A, 2D, 2G, 2J, 3A, 3D, 3G, 3J, 4A, 4D, 4G, 4J, 5A, 5H, 5J, 6A, 6J, 7A, 7D, 7H, 7J, 8A, 8D, 8F, 8J, 9A, 9D, 9H, 9J, 10A, 10D, 10J, 11A, 11D, 11H, 11I, 11J, 12A, 12J, 13A, 13J, 14A, 14B, 14C, 14D, 14E, 14F, 14G, 14H, 14I, 14J
 Boxes: 5E, 6F, 7E, 12C, 13C, 6H
 Switches: 2C, 2E, 6D, 9G, 12I, 13I
+Floors: 2B, 2C, 2E, 2F, 2H, 2I, 3B, 3C, 3E, 3F, 3H, 3I, 4B, 4C, 4E, 4F, 4H, 4I, 5B, 5C, 5D, 5E, 5F, 5G, 5I, 6B, 6C, 6D, 6E, 6F, 6G, 6H, 6I, 7B, 7C, 7E, 7F, 7G, 7I, 8B, 8C, 8E, 8G, 8H, 8I, 9B, 9C, 9E, 9F, 9G, 9I, 10B, 10C, 10E, 10F, 10G, 10H, 10I, 11B, 11C, 11E, 11F, 11G, 12B, 12C, 12I, 13B, 13C, 13I
+IceFloors: 12D, 12E, 12F, 12G, 12H, 13D, 13E, 13F, 13G, 13H
 Player: 4E
 
 Level 3:
@@ -556,11 +586,117 @@ Player: 10G`;
 
         if (editorGrid.length === 0) {
             editorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
+            editorFloorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
             editorBoxes = [];
             editorPlayer = { x: 1, y: 1 };
         }
         
         resizeEditorCanvas();
+    }
+
+    function serializeLevel(g, fg, b, p, w, h) {
+        let normalWalls = [], iceWalls = [], switches = [], boxesStr = [], normalFloors = [], iceFloors = [];
+        
+        for (let x = 0; x < w; x++) {
+            for (let y = 0; y < h; y++) {
+                if (!g[x]) continue;
+                const coord = `${x + 1}${String.fromCharCode(65 + y)}`;
+                if (g[x][y] === 'wall') normalWalls.push(coord);
+                if (g[x][y] === 'icewall') iceWalls.push(coord);
+                if (g[x][y] === 'switch') switches.push(coord);
+                if (fg[x][y] === 'floor') {
+                    normalFloors.push(coord);
+                }
+                if (fg[x][y] === 'icefloor') {
+                    iceFloors.push(coord);
+                }
+            }
+        }
+        b.forEach(box => {
+            boxesStr.push(`${box.x + 1}${String.fromCharCode(65 + box.y)}`);
+        });
+        const playerStr = `${p.x + 1}${String.fromCharCode(65 + p.y)}`;
+
+        let data = "";
+        if (normalWalls.length > 0) data += `Walls: ${normalWalls.join(', ')}\n`;
+        if (iceWalls.length > 0) data += `IceWalls: ${iceWalls.join(', ')}\n`;
+        if (boxesStr.length > 0) data += `Boxes: ${boxesStr.join(', ')}\n`;
+        if (switches.length > 0) data += `Switches: ${switches.join(', ')}\n`;
+        
+        if (normalFloors.length > 0) data += `Floors: ${normalFloors.join(', ')}\n`;
+        if (iceFloors.length > 0) data += `IceFloors: ${iceFloors.join(', ')}\n`;
+
+        data += `Player: ${playerStr}`;
+        return data;
+    }
+
+    function applyInfill(g, fg, w, h) {
+        const visitedTotal = Array.from({length: w || 1}, () => Array(h || 1).fill(false));
+        
+        const isOutside = Array.from({length: w || 1}, () => Array(h || 1).fill(false));
+        const stackOutside = [];
+        for (let y = 0; y < h; y++) {
+            if (!g[0] || (g[0][y] !== 'wall' && g[0][y] !== 'icewall')) stackOutside.push([0, y]);
+            if (!g[w - 1] || (g[w - 1][y] !== 'wall' && g[w - 1][y] !== 'icewall')) stackOutside.push([w - 1, y]);
+        }
+        for (let x = 0; x < w; x++) {
+            if (!g[x] || (g[x][0] !== 'wall' && g[x][0] !== 'icewall')) stackOutside.push([x, 0]);
+            if (!g[x] || (g[x][h - 1] !== 'wall' && g[x][h - 1] !== 'icewall')) stackOutside.push([x, h - 1]);
+        }
+        
+        while (stackOutside.length > 0) {
+            const [cx, cy] = stackOutside.pop();
+            if (cx < 0 || cx >= w || cy < 0 || cy >= h || isOutside[cx][cy] || !g[cx] || g[cx][cy] === 'wall' || g[cx][cy] === 'icewall') continue;
+            isOutside[cx][cy] = true;
+            stackOutside.push([cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]);
+        }
+
+        for (let x = 0; x < w; x++) {
+            for (let y = 0; y < h; y++) {
+                if (!isOutside[x][y] && g[x][y] !== 'wall' && g[x][y] !== 'icewall' && !visitedTotal[x][y]) {
+                    const enclosure = [];
+                    const stack = [[x, y]];
+                    visitedTotal[x][y] = true;
+                    let wallCounts = { wall: 0, icewall: 0 };
+                    let floorCounts = { floor: 0, icefloor: 0 };
+                    
+                    while (stack.length > 0) {
+                        const [cx, cy] = stack.pop();
+                        enclosure.push([cx, cy]);
+                        
+                        if (fg[cx] && fg[cx][cy] === 'floor') floorCounts.floor++;
+                        else if (fg[cx] && fg[cx][cy] === 'icefloor') floorCounts.icefloor++;
+
+                        const neighbors = [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]];
+                        for (const [nx, ny] of neighbors) {
+                            if (nx < 0 || nx >= w || ny < 0 || ny >= h || !g[nx]) continue;
+                            const cell = g[nx][ny];
+                            if (cell === 'wall') {
+                                wallCounts.wall++;
+                            } else if (cell === 'icewall') {
+                                wallCounts.icewall++;
+                            } else if (!visitedTotal[nx][ny] && !isOutside[nx][ny]) {
+                                visitedTotal[nx][ny] = true;
+                                stack.push([nx, ny]);
+                            }
+                        }
+                    }
+                    
+                    let defaultFloor;
+                    if (floorCounts.icefloor > 0 || floorCounts.floor > 0) {
+                        defaultFloor = floorCounts.icefloor > floorCounts.floor ? 'icefloor' : 'floor';
+                    } else {
+                        defaultFloor = wallCounts.icewall > wallCounts.wall ? 'icefloor' : 'floor';
+                    }
+                    
+                    enclosure.forEach(([rx, ry]) => {
+                        if (fg[rx] && (fg[rx][ry] === null || fg[rx][ry] === undefined)) {
+                            fg[rx][ry] = defaultFloor;
+                        }
+                    });
+                }
+            }
+        }
     }
 
     function testLevel() {
@@ -569,23 +705,7 @@ Player: 10G`;
             return;
         }
 
-        let walls = [], switches = [], boxesStr = [];
-        for (let x = 0; x < EDITOR_WIDTH; x++) {
-            for (let y = 0; y < EDITOR_HEIGHT; y++) {
-                const coord = `${x + 1}${String.fromCharCode(65 + y)}`;
-                if (editorGrid[x][y] === 'wall') walls.push(coord);
-                if (editorGrid[x][y] === 'switch') switches.push(coord);
-            }
-        }
-        editorBoxes.forEach(b => {
-            boxesStr.push(`${b.x + 1}${String.fromCharCode(65 + b.y)}`);
-        });
-        const playerStr = `${editorPlayer.x + 1}${String.fromCharCode(65 + editorPlayer.y)}`;
-
-        testLevelData = `Walls: ${walls.join(', ')}\n` +
-            `Boxes: ${boxesStr.join(', ')}\n` +
-            `Switches: ${switches.join(', ')}\n` +
-            `Player: ${playerStr}`;
+        testLevelData = serializeLevel(editorGrid, editorFloorGrid, editorBoxes, editorPlayer, EDITOR_WIDTH, EDITOR_HEIGHT);
 
         isEditing = false;
         isTesting = true;
@@ -689,21 +809,41 @@ Player: 10G`;
         if (currentTool === 'wall') {
             editorGrid[x][y] = 'wall';
             editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+            applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
+        } else if (currentTool === 'icewall') {
+            editorGrid[x][y] = 'icewall';
+            editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+            applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
         } else if (currentTool === 'box') {
             editorGrid[x][y] = null;
             if (!editorBoxes.some(b => b.x === x && b.y === y)) {
                 editorBoxes.push({x, y});
             }
+            applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
         } else if (currentTool === 'switch') {
             editorGrid[x][y] = 'switch';
             editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+            applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
         } else if (currentTool === 'player') {
             editorGrid[x][y] = null;
             editorPlayer = {x, y};
             editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+            applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
         } else if (currentTool === 'floor') {
             editorGrid[x][y] = null;
+            editorFloorGrid[x][y] = 'floor'; 
             editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+            applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
+        } else if (currentTool === 'icefloor') {
+            editorGrid[x][y] = null;
+            editorFloorGrid[x][y] = 'icefloor';
+            editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+            applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
+        } else if (currentTool === 'erase') {
+            editorGrid[x][y] = null;
+            editorFloorGrid[x][y] = null; 
+            editorBoxes = editorBoxes.filter(b => b.x !== x || b.y !== y);
+            applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
         }
     }
 
@@ -712,23 +852,8 @@ Player: 10G`;
             showEnclosureWarning("Return to Level Editor");
             return;
         }
-        let walls = [], switches = [], boxesStr = [];
-        for (let x = 0; x < EDITOR_WIDTH; x++) {
-            for (let y = 0; y < EDITOR_HEIGHT; y++) {
-                const coord = `${x + 1}${String.fromCharCode(65 + y)}`;
-                if (editorGrid[x][y] === 'wall') walls.push(coord);
-                if (editorGrid[x][y] === 'switch') switches.push(coord);
-            }
-        }
-        editorBoxes.forEach(b => {
-            boxesStr.push(`${b.x + 1}${String.fromCharCode(65 + b.y)}`);
-        });
-        const playerStr = `${editorPlayer.x + 1}${String.fromCharCode(65 + editorPlayer.y)}`;
 
-        const levelData = `Walls: ${walls.join(', ')}\n` +
-            `Boxes: ${boxesStr.join(', ')}\n` +
-            `Switches: ${switches.join(', ')}\n` +
-            `Player: ${playerStr}`;
+        const levelData = serializeLevel(editorGrid, editorFloorGrid, editorBoxes, editorPlayer, EDITOR_WIDTH, EDITOR_HEIGHT);
 
         levels.push({
             name: `Level ${levels.length + 1}`,
@@ -759,8 +884,87 @@ Player: 10G`;
     function clearEditorGrid() {
         if (confirm('Are you sure you want to clear the level? This will remove everything except the player.')) {
             editorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
+            editorFloorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
             editorBoxes = [];
         }
+    }
+
+    function loadLevelIntoEditor(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            const levelMatches = content.match(/Level \d+:/gi);
+            
+            if (levelMatches && levelMatches.length > 1) {
+                alert("You can only load one level at a time");
+                input.value = "";
+                return;
+            }
+
+            let levelData = content;
+            const headerMatch = content.match(/Level \d+:\s*([\s\S]*)/i);
+            if (headerMatch) {
+                levelData = headerMatch[1].trim();
+            }
+
+            try {
+                const lines = levelData.split('\n').map(l => l.trim()).filter(l => l);
+                let tempNormalWalls = [], tempIceWalls = [], tempBoxes = [], tempSwitches = [], tempPlayer = {x: 0, y: 0};
+                let tempNormalFloors = [], tempIceFloors = [];
+
+                for (const line of lines) {
+                    const parts = line.split(':');
+                    if (parts.length < 2) continue;
+                    const type = parts[0].trim().toLowerCase();
+                    const coordsStr = parts[1].trim();
+                    const coords = coordsStr.split(',').map(c => c.trim().toUpperCase())
+                        .filter(c => c.length >= 2 && /^\d+[A-Z]$/.test(c))
+                        .map(c => {
+                            const letter = c.slice(-1);
+                            const num = parseInt(c.slice(0, -1), 10);
+                            const col = num - 1;
+                            const row = letter.charCodeAt(0) - 'A'.charCodeAt(0);
+                            if (col < 0 || col >= EDITOR_WIDTH || row < 0 || row >= EDITOR_HEIGHT) return null;
+                            return {x: col, y: row};
+                        }).filter(Boolean);
+
+                    if (type === 'walls') tempNormalWalls = coords;
+                    else if (type === 'icewalls') tempIceWalls = coords;
+                    else if (type === 'boxes') tempBoxes = coords;
+                    else if (type === 'switches') tempSwitches = coords;
+                    else if (type === 'floors') tempNormalFloors = coords;
+                    else if (type === 'icefloors') tempIceFloors = coords;
+                    else if (type === 'player' && coords.length > 0) tempPlayer = coords[0];
+                }
+
+                editorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
+                editorFloorGrid = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(null));
+                
+                tempNormalWalls.forEach(p => editorGrid[p.x][p.y] = 'wall');
+                tempIceWalls.forEach(p => {
+                    editorGrid[p.x][p.y] = 'icewall';
+                    editorFloorGrid[p.x][p.y] = 'icefloor';
+                });
+                tempSwitches.forEach(p => editorGrid[p.x][p.y] = 'switch');
+                tempIceFloors.forEach(p => editorFloorGrid[p.x][p.y] = 'icefloor');
+                tempNormalFloors.forEach(p => editorFloorGrid[p.x][p.y] = 'floor');
+                
+                editorBoxes = tempBoxes;
+                editorPlayer = tempPlayer;
+
+                applyInfill(editorGrid, editorFloorGrid, EDITOR_WIDTH, EDITOR_HEIGHT);
+                
+                alert("Level loaded into editor!");
+            } catch (err) {
+                console.error(err);
+                alert("Error parsing level data.");
+            }
+            input.value = "";
+        };
+        reader.readAsText(file);
     }
 
     async function deleteCurrentLevel() {
@@ -822,7 +1026,8 @@ Player: 10G`;
 
     function parseLevel(text) {
         const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l);
-        let walls = [], tempBoxes = [], tempSwitches = [], playerPos = null;
+        let normalWalls = [], iceWalls = [], tempBoxes = [], tempSwitches = [], playerPos = null;
+        let normalFloors = [], iceFloors = [];
         let usedCols = 1, usedRows = 1;
 
         for (const line of lines) {
@@ -845,26 +1050,43 @@ Player: 10G`;
                 }).filter(Boolean);
 
             const lowerType = type.toLowerCase();
-            if (lowerType === 'walls') walls = coords;
+            if (lowerType === 'walls') normalWalls = coords;
+            else if (lowerType === 'icewalls') iceWalls = coords;
             else if (lowerType === 'boxes') tempBoxes = coords;
             else if (lowerType === 'switches') tempSwitches = coords;
+            else if (lowerType === 'floors') normalFloors = coords;
+            else if (lowerType === 'icefloors') iceFloors = coords;
             else if (lowerType === 'player' && coords.length > 0) playerPos = coords[0];
         }
 
-        width = Math.min(usedCols, MAX_COL);
-        height = Math.min(usedRows, MAX_ROW);
+        width = Math.max(1, Math.min(usedCols, MAX_COL));
+        height = Math.max(1, Math.min(usedRows, MAX_ROW));
 
         grid = Array.from({length: width}, () => Array(height).fill(null));
+        floorGrid = Array.from({length: width}, () => Array(height).fill(null));
 
-        walls.forEach(pos => {
+        normalWalls.forEach(pos => {
             grid[pos.x][pos.y] = 'wall';
+        });
+        iceWalls.forEach(pos => {
+            grid[pos.x][pos.y] = 'icewall';
+            floorGrid[pos.x][pos.y] = 'icefloor';
         });
 
         tempSwitches.forEach(pos => {
             grid[pos.x][pos.y] = 'switch';
         });
 
+        iceFloors.forEach(pos => {
+            floorGrid[pos.x][pos.y] = 'icefloor';
+        });
+        normalFloors.forEach(pos => {
+            floorGrid[pos.x][pos.y] = 'floor';
+        });
+
         boxes = tempBoxes;
+
+        applyInfill(grid, floorGrid, width, height);
 
         if (playerPos) {
             player.x = playerPos.x;
@@ -874,8 +1096,8 @@ Player: 10G`;
     }
 
     function isWall(x, y) {
-        if (x < 0 || x >= width || y < 0 || y >= height) return true;
-        return grid[x][y] === 'wall';
+        if (x < 0 || x >= width || y < 0 || y >= height || !grid[x]) return true;
+        return grid[x][y] === 'wall' || grid[x][y] === 'icewall';
     }
 
     function isBoxAt(x, y) {
@@ -895,7 +1117,7 @@ Player: 10G`;
 
         for (let x = 0; x < width; x++) {
             for (let y = 0; y < height; y++) {
-                if (grid[x][y] === 'wall' || grid[x][y] === 'switch') {
+                if (grid[x][y] === 'wall' || grid[x][y] === 'icewall' || grid[x][y] === 'switch') {
                     minX = Math.min(minX, x);
                     minY = Math.min(minY, y);
                     maxX = Math.max(maxX, x);
@@ -917,8 +1139,8 @@ Player: 10G`;
             minX = 0; minY = 0; maxX = width - 1; maxY = height - 1;
         }
 
-        const geoWidth = (maxX - minX + 1) * GRID_SIZE;
-        const geoHeight = (maxY - minY + 1) * GRID_SIZE;
+        const geoWidth = Math.max(GRID_SIZE, (maxX - minX + 1) * GRID_SIZE) || GRID_SIZE;
+        const geoHeight = Math.max(GRID_SIZE, (maxY - minY + 1) * GRID_SIZE) || GRID_SIZE;
 
         const margin = isMobile ? 0.98 : 0.9;
         scale = Math.min(viewWidth / geoWidth * margin, viewHeight / geoHeight * margin);
@@ -948,24 +1170,48 @@ Player: 10G`;
         if (dir) {
             player.facing = dir;
             const { dx, dy } = directions[dir];
-            const nx = player.x + dx;
-            const ny = player.y + dy;
+            
+            let nx = player.x + dx;
+            let ny = player.y + dy;
 
-            setTimeout(() => { checkWin(); }, 500);
-
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height || isWall(nx, ny)) return;
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height || isWall(nx, ny)) {
+                setTimeout(() => { checkWin(); }, 500);
+                return;
+            }
 
             const boxIndex = boxes.findIndex(b => b.x === nx && b.y === ny);
             if (boxIndex !== -1) {
-                const boxNx = nx + dx;
-                const boxNy = ny + dy;
-                if (boxNx < 0 || boxNx >= width || boxNy < 0 || boxNy >= height || isWall(boxNx, boxNy) || isBoxAt(boxNx, boxNy)) return;
+                let boxNx = nx + dx;
+                let boxNy = ny + dy;
+                if (boxNx < 0 || boxNx >= width || boxNy < 0 || boxNy >= height || isWall(boxNx, boxNy) || isBoxAt(boxNx, boxNy)) {
+                    setTimeout(() => { checkWin(); }, 500);
+                    return;
+                }
+                
+                while (boxNx >= 0 && boxNx < width && boxNy >= 0 && boxNy < height && floorGrid[boxNx][boxNy] === 'icefloor') {
+                    let nextBx = boxNx + dx;
+                    let nextBy = boxNy + dy;
+                    if (nextBx < 0 || nextBx >= width || nextBy < 0 || nextBy >= height || isWall(nextBx, nextBy) || isBoxAt(nextBx, nextBy)) break;
+                    boxNx = nextBx;
+                    boxNy = nextBy;
+                }
+
                 boxes[boxIndex].x = boxNx;
                 boxes[boxIndex].y = boxNy;
             }
 
+            while (nx >= 0 && nx < width && ny >= 0 && ny < height && floorGrid[nx][ny] === 'icefloor') {
+                let nextPx = nx + dx;
+                let nextPy = ny + dy;
+                if (nextPx < 0 || nextPx >= width || nextPy < 0 || nextPy >= height || isWall(nextPx, nextPy) || isBoxAt(nextPx, nextPy)) break;
+                nx = nextPx;
+                ny = nextPy;
+            }
+
             player.x = nx;
             player.y = ny;
+
+            setTimeout(() => { checkWin(); }, 500);
         }
     }
 
@@ -1027,8 +1273,8 @@ Player: 10G`;
         if (document.getElementById('editor-ui').style.display === 'none') return;
         editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
         editorCtx.save();
-        editorCtx.scale(editorScale, editorScale);
-        editorCtx.translate(editorOffsetX, editorOffsetY);
+        editorCtx.scale(editorScale || 1, editorScale || 1);
+        editorCtx.translate(editorOffsetX || 0, editorOffsetY || 0);
 
         editorCtx.strokeStyle = '#333';
         editorCtx.lineWidth = 0.5;
@@ -1045,7 +1291,9 @@ Player: 10G`;
             editorCtx.stroke();
         }
 
-        const visited = Array.from({length: EDITOR_WIDTH}, () => Array(EDITOR_HEIGHT).fill(false));
+        const widthToUse = EDITOR_WIDTH || 1;
+        const heightToUse = EDITOR_HEIGHT || 1;
+        const visited = Array.from({length: widthToUse}, () => Array(heightToUse).fill(false));
         const floodFromEdges = (w, h, isWallFn, fillFn) => {
             for (let y = 0; y < h; y++) {
                 if (!isWallFn(0, y)) fillFn(0, y);
@@ -1056,50 +1304,63 @@ Player: 10G`;
                 if (!isWallFn(x, h - 1)) fillFn(x, h - 1);
             }
         };
-        const floodFillFn = (x, y) => {
-            const stack = [[x, y]];
+        const floodFillFn = (startX, startY) => {
+            const stack = [[startX, startY]];
             while (stack.length > 0) {
                 const [cx, cy] = stack.pop();
-                if (cx < 0 || cx >= EDITOR_WIDTH || cy < 0 || cy >= EDITOR_HEIGHT || 
-                    editorGrid[cx][cy] === 'wall' || visited[cx][cy]) continue;
+                if (cx < 0 || cx >= widthToUse || cy < 0 || cy >= heightToUse || 
+                    !editorGrid[cx] || editorGrid[cx][cy] === 'wall' || editorGrid[cx][cy] === 'icewall' || visited[cx][cy]) continue;
                 visited[cx][cy] = true;
                 stack.push([cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]);
             }
         };
-        floodFromEdges(EDITOR_WIDTH, EDITOR_HEIGHT, (x, y) => editorGrid[x][y] === 'wall', floodFillFn);
+        floodFromEdges(widthToUse, heightToUse, (x, y) => !editorGrid[x] || editorGrid[x][y] === 'wall' || editorGrid[x][y] === 'icewall', (x, y) => {
+            if (!visited[x][y]) floodFillFn(x, y);
+        });
 
         for (let x = 0; x < EDITOR_WIDTH; x++) {
             for (let y = 0; y < EDITOR_HEIGHT; y++) {
-                if (!visited[x][y] || editorGrid[x][y] === 'wall') {
-                    if (editorGrid[x][y] !== 'wall') {
-                        editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
-                    }
+                if (editorFloorGrid[x] && editorFloorGrid[x][y]) {
+                    const floorImg = editorFloorGrid[x][y] === 'icefloor' ? images.icefloor : images.floor;
+                    editorCtx.drawImage(floorImg, x * GRID_SIZE, y * GRID_SIZE);
                 }
             }
         }
 
         for (let x = 0; x < EDITOR_WIDTH; x++) {
             for (let y = 0; y < EDITOR_HEIGHT; y++) {
+                if (!editorGrid[x]) continue;
                 const cell = editorGrid[x][y];
                 if (cell === 'wall') {
-                    editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                    if (!visited[x][y]) editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
                     editorCtx.drawImage(images.wall, x * GRID_SIZE, y * GRID_SIZE);
-                }
-                if (cell === 'switch') {
-                    editorCtx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                } else if (cell === 'icewall') {
+                    if (!visited[x][y]) editorCtx.drawImage(images.icefloor, x * GRID_SIZE, y * GRID_SIZE);
+                    editorCtx.drawImage(images.icewall, x * GRID_SIZE, y * GRID_SIZE);
+                } else if (cell === 'switch') {
+                    if (!visited[x][y]) {
+                        const floorImg = editorFloorGrid[x] && editorFloorGrid[x][y] === 'icefloor' ? images.icefloor : images.floor;
+                        editorCtx.drawImage(floorImg, x * GRID_SIZE, y * GRID_SIZE);
+                    }
                     editorCtx.drawImage(images.switch, x * GRID_SIZE, y * GRID_SIZE);
                 }
             }
         }
 
         editorBoxes.forEach(b => {
-            if (!visited[b.x][b.y]) {
+            if (editorFloorGrid[b.x] && editorFloorGrid[b.x][b.y]) {
+                const floorImg = editorFloorGrid[b.x][b.y] === 'icefloor' ? images.icefloor : images.floor;
+                editorCtx.drawImage(floorImg, b.x * GRID_SIZE, b.y * GRID_SIZE);
+            } else if (!visited[b.x][b.y]) {
                 editorCtx.drawImage(images.floor, b.x * GRID_SIZE, b.y * GRID_SIZE);
             }
             editorCtx.drawImage(images.box, b.x * GRID_SIZE, b.y * GRID_SIZE);
         });
 
-        if (!visited[editorPlayer.x][editorPlayer.y]) {
+        if (editorFloorGrid[editorPlayer.x] && editorFloorGrid[editorPlayer.x][editorPlayer.y]) {
+            const floorImg = editorFloorGrid[editorPlayer.x][editorPlayer.y] === 'icefloor' ? images.icefloor : images.floor;
+            editorCtx.drawImage(floorImg, editorPlayer.x * GRID_SIZE, editorPlayer.y * GRID_SIZE);
+        } else if (!visited[editorPlayer.x][editorPlayer.y]) {
             editorCtx.drawImage(images.floor, editorPlayer.x * GRID_SIZE, editorPlayer.y * GRID_SIZE);
         }
         editorCtx.drawImage(images.lookdown, editorPlayer.x * GRID_SIZE, editorPlayer.y * GRID_SIZE);
@@ -1111,10 +1372,13 @@ Player: 10G`;
         if (document.getElementById('gameCanvas').style.display === 'none') return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.save();
-        ctx.scale(scale, scale);
-        ctx.translate(offsetX, offsetY);
+        ctx.scale(scale || 1, scale || 1);
+        ctx.translate(offsetX || 0, offsetY || 0);
 
-        const visited = Array.from({length: width}, () => Array(height).fill(false));
+
+        const widthToUse = width || 1;
+        const heightToUse = height || 1;
+        const visited = Array.from({length: widthToUse}, () => Array(heightToUse).fill(false));
         const floodFromEdges = (w, h, isWallFn, fillFn) => {
             for (let y = 0; y < h; y++) {
                 if (!isWallFn(0, y)) fillFn(0, y);
@@ -1125,45 +1389,75 @@ Player: 10G`;
                 if (!isWallFn(x, h - 1)) fillFn(x, h - 1);
             }
         };
-        const floodFillFn = (x, y) => {
-            const stack = [[x, y]];
+        const floodFillFn = (startX, startY) => {
+            const stack = [[startX, startY]];
             while (stack.length > 0) {
                 const [cx, cy] = stack.pop();
-                if (cx < 0 || cx >= width || cy < 0 || cy >= height || 
-                    grid[cx][cy] === 'wall' || visited[cx][cy]) continue;
+                if (cx < 0 || cx >= widthToUse || cy < 0 || cy >= heightToUse || 
+                    !grid[cx] || grid[cx][cy] === 'wall' || grid[cx][cy] === 'icewall' || visited[cx][cy]) continue;
                 visited[cx][cy] = true;
                 stack.push([cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]);
             }
         };
-        floodFromEdges(width, height, (x, y) => grid[x][y] === 'wall', floodFillFn);
+        floodFromEdges(widthToUse, heightToUse, (x, y) => !grid[x] || grid[x][y] === 'wall' || grid[x][y] === 'icewall', (x, y) => {
+            if (!visited[x][y]) floodFillFn(x, y);
+        });
 
         for (let x = 0; x < width; x++) {
             for (let y = 0; y < height; y++) {
-                if (!visited[x][y] && grid[x][y] !== 'wall') {
-                    ctx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                if (floorGrid[x] && floorGrid[x][y]) {
+                    const floorImg = floorGrid[x][y] === 'icefloor' ? images.icefloor : images.floor;
+                    ctx.drawImage(floorImg, x * GRID_SIZE, y * GRID_SIZE);
+                } 
+                else if (grid[x] && grid[x][y] !== 'wall' && grid[x][y] !== 'icewall' && !visited[x][y]) {
+                    const floorImg = (floorGrid[x] && floorGrid[x][y] === 'icefloor') ? images.icefloor : images.floor;
+                    ctx.drawImage(floorImg, x * GRID_SIZE, y * GRID_SIZE);
                 }
             }
         }
 
         for (let x = 0; x < width; x++) {
             for (let y = 0; y < height; y++) {
+                if (!grid[x]) continue;
                 const cell = grid[x][y];
                 if (cell === 'wall') {
-                    ctx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
+                    if (!visited[x][y]) ctx.drawImage(images.floor, x * GRID_SIZE, y * GRID_SIZE);
                     ctx.drawImage(images.wall, x * GRID_SIZE, y * GRID_SIZE);
-                }
-                if (cell === 'switch') {
+                } else if (cell === 'icewall') {
+                    if (!visited[x][y]) ctx.drawImage(images.icefloor, x * GRID_SIZE, y * GRID_SIZE);
+                    ctx.drawImage(images.icewall, x * GRID_SIZE, y * GRID_SIZE);
+                } else if (cell === 'switch') {
+                    if (!visited[x][y]) {
+                        const floorImg = floorGrid[x] && floorGrid[x][y] === 'icefloor' ? images.icefloor : images.floor;
+                        ctx.drawImage(floorImg, x * GRID_SIZE, y * GRID_SIZE);
+                    }
                     ctx.drawImage(images.switch, x * GRID_SIZE, y * GRID_SIZE);
                 }
             }
         }
 
         boxes.forEach(b => {
+            if (floorGrid[b.x] && floorGrid[b.x][b.y]) {
+                const floorImg = floorGrid[b.x][b.y] === 'icefloor' ? images.icefloor : images.floor;
+                ctx.drawImage(floorImg, b.x * GRID_SIZE, b.y * GRID_SIZE);
+            } else if (!visited[b.x][b.y]) {
+                const floorImg = (floorGrid[b.x] && floorGrid[b.x][b.y] === 'icefloor') ? images.icefloor : images.floor;
+                ctx.drawImage(floorImg, b.x * GRID_SIZE, b.y * GRID_SIZE);
+            }
             ctx.drawImage(images.box, b.x * GRID_SIZE, b.y * GRID_SIZE);
         });
 
-        const playerImgKey = directions[player.facing].look;
-        ctx.drawImage(images[playerImgKey], player.x * GRID_SIZE, player.y * GRID_SIZE);
+        if (player.x !== undefined && player.y !== undefined) {
+            if (floorGrid[player.x] && floorGrid[player.x][player.y]) {
+                const floorImg = floorGrid[player.x][player.y] === 'icefloor' ? images.icefloor : images.floor;
+                ctx.drawImage(floorImg, player.x * GRID_SIZE, player.y * GRID_SIZE);
+            } else if (!visited[player.x][player.y]) {
+                const floorImg = (floorGrid[player.x] && floorGrid[player.x][player.y] === 'icefloor') ? images.icefloor : images.floor;
+                ctx.drawImage(floorImg, player.x * GRID_SIZE, player.y * GRID_SIZE);
+            }
+            const playerImgKey = directions[player.facing].look;
+            ctx.drawImage(images[playerImgKey], player.x * GRID_SIZE, player.y * GRID_SIZE);
+        }
 
         ctx.restore();
     }
