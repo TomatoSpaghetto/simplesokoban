@@ -154,7 +154,15 @@
         lookdown: new Image(),
         lookleft: new Image(),
         lookright: new Image(),
-        lookup: new Image()
+        lookup: new Image(),
+        walkdown1: new Image(),
+        walkdown2: new Image(),
+        walkleft1: new Image(),
+        walkleft2: new Image(),
+        walkright1: new Image(),
+        walkright2: new Image(),
+        walkup1: new Image(),
+        walkup2: new Image()
     };
 
     images.floor.src = 'floor.png';
@@ -167,6 +175,14 @@
     images.lookleft.src = 'lookleft.png';
     images.lookright.src = 'lookright.png';
     images.lookup.src = 'lookup.png';
+    images.walkdown1.src = 'walkdown1.png';
+    images.walkdown2.src = 'walkdown2.png';
+    images.walkleft1.src = 'walkleft1.png';
+    images.walkleft2.src = 'walkleft2.png';
+    images.walkright1.src = 'walkright1.png';
+    images.walkright2.src = 'walkright2.png';
+    images.walkup1.src = 'walkup1.png';
+    images.walkup2.src = 'walkup2.png';
 
     const levels = [];
     let currentLevelIndex = 0;
@@ -176,8 +192,11 @@
     let grid = [];
     let floorGrid = [];
     let boxes = [];
-    let player = { x: 0, y: 0, facing: 'down' };
+    let player = { x: 0, y: 0, facing: 'down', pixelX: 0, pixelY: 0, targetX: 0, targetY: 0, isMoving: false, moveProgress: 0, walkStep: 0, isSliding: false };
     let width = 0, height = 0;
+    const MOVE_SPEED = 0.15; // Speed of movement (0 to 1 per frame)
+    const BOX_MOVE_SPEED = 0.16; // faster than player's 0.15
+    let moveQueue = [];
     let scale = 4;
     let editorScale = 2;
     let baseEditorScale = 2;
@@ -1102,14 +1121,28 @@ Player: 2B`;
             floorGrid[pos.x][pos.y] = 'floor';
         });
 
-        boxes = tempBoxes;
+        boxes = tempBoxes.map(pos => ({
+            x: pos.x, y: pos.y,
+            pixelX: pos.x * GRID_SIZE, pixelY: pos.y * GRID_SIZE,
+            targetX: pos.x, targetY: pos.y,
+            isMoving: false, moveProgress: 0,
+            slideDir: null   // ← add this line
+        }));
 
         applyInfill(grid, floorGrid, width, height);
 
         if (playerPos) {
             player.x = playerPos.x;
             player.y = playerPos.y;
+            player.pixelX = playerPos.x * GRID_SIZE;
+            player.pixelY = playerPos.y * GRID_SIZE;
+            player.targetX = playerPos.x;
+            player.targetY = playerPos.y;
+            player.isMoving = false;
+            player.moveProgress = 0;
             player.facing = 'down';
+            player.isSliding = false;
+            moveQueue = [];
         }
     }
 
@@ -1120,6 +1153,29 @@ Player: 2B`;
 
     function isBoxAt(x, y) {
         return boxes.some(b => b.x === x && b.y === y);
+    }
+
+    function canSlideTo(nx, ny, dx, dy) {
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height || isWall(nx, ny)) return false;
+        const blockingBox = boxes.find(b => b.x === nx && b.y === ny);
+        if (!blockingBox) return true;
+        const boxDx = blockingBox.targetX - blockingBox.x;
+        const boxDy = blockingBox.targetY - blockingBox.y;
+        return blockingBox.isMoving && boxDx === dx && boxDy === dy;
+    }
+
+    function canMoveInto(nx, ny, dx, dy) {
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height || isWall(nx, ny)) return false;
+        
+        const box = boxes.find(b => b.x === nx && b.y === ny);
+        if (box) {
+            // Can move into box if it's already moving in the same direction
+            if (box.isMoving && (box.targetX - box.x) === dx && (box.targetY - box.y) === dy) {
+                return true;
+            }
+            return false;
+        }
+        return true;
     }
     
 
@@ -1179,6 +1235,8 @@ Player: 2B`;
         if (isEditing) return;
         if (document.getElementById('gameCanvas').style.display === 'none') return;
         if (document.getElementById('win-overlay').style.display === 'block') return;
+        if (player.isMoving) return;
+
         let dir = null;
         if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'up') dir = 'up';
         if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'down') dir = 'down';
@@ -1186,50 +1244,105 @@ Player: 2B`;
         if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'right') dir = 'right';
 
         if (dir) {
-            player.facing = dir;
-            const { dx, dy } = directions[dir];
-            
-            let nx = player.x + dx;
-            let ny = player.y + dy;
+            if (moveQueue.length < 2) {
+                moveQueue.push(dir);
+            }
+        }
+    }
 
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height || isWall(nx, ny)) {
-                setTimeout(() => { checkWin(); }, 500);
+    function processMovement() {
+        let dir = moveQueue.shift();
+        if (!dir) return;
+
+        player.facing = dir;
+        const dirData = directions[dir];
+        let nx = player.x + dirData.dx;
+        let ny = player.y + dirData.dy;
+
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height || isWall(nx, ny)) {
+            return;
+        }
+
+        const boxIndex = boxes.findIndex(b => b.x === nx && b.y === ny);
+        if (boxIndex !== -1) {
+            let bnx = nx + dirData.dx;
+            let bny = ny + dirData.dy;
+            if (!canSlideTo(bnx, bny, dirData.dx, dirData.dy)) {
                 return;
             }
+            startMoving(boxes[boxIndex], bnx, bny, dir);
+        }
 
-            const boxIndex = boxes.findIndex(b => b.x === nx && b.y === ny);
-            if (boxIndex !== -1) {
-                let boxNx = nx + dx;
-                let boxNy = ny + dy;
-                if (boxNx < 0 || boxNx >= width || boxNy < 0 || boxNy >= height || isWall(boxNx, boxNy) || isBoxAt(boxNx, boxNy)) {
-                    setTimeout(() => { checkWin(); }, 500);
-                    return;
+        startMoving(player, nx, ny, dir);
+    }
+
+    function updateAllEntities() {
+        // Update boxes first (important for collision detection)
+        boxes.forEach(b => {
+            if (b.isMoving) updateInterpolation(b);
+        });
+        // Then player
+        if (player.isMoving) updateInterpolation(player);
+    }
+
+    function startMoving(entity, tx, ty, dir = null) {
+        entity.targetX = tx;
+        entity.targetY = ty;
+        entity.isMoving = true;
+        entity.moveProgress = 0;
+        if (entity === player) {
+            if (dir) entity.facing = dir;
+        } else {
+            if (dir) entity.slideDir = dir;
+        }
+    }
+
+    function updateInterpolation(entity) {
+        const speed = (entity === player) ? MOVE_SPEED : BOX_MOVE_SPEED;
+        entity.moveProgress += speed;
+
+        if (entity.moveProgress >= 1) {
+            entity.moveProgress = 1;
+            entity.pixelX = entity.targetX * GRID_SIZE;
+            entity.pixelY = entity.targetY * GRID_SIZE;
+            entity.x = entity.targetX;
+            entity.y = entity.targetY;
+            entity.isMoving = false;
+
+            if (entity === player) {
+                if (floorGrid[entity.x][entity.y] === 'icefloor') {
+                    entity.isSliding = true;
+                    const dirData = directions[entity.facing];
+                    let nx = entity.x + dirData.dx;
+                    let ny = entity.y + dirData.dy;
+                    if (canSlideTo(nx, ny, dirData.dx, dirData.dy)) {
+                        startMoving(entity, nx, ny, entity.facing);
+                    } else {
+                        entity.isSliding = false;
+                        entity.walkStep = (entity.walkStep + 1) % 2;
+                    }
+                } else {
+                    entity.isSliding = false;
+                    entity.walkStep = (entity.walkStep + 1) % 2;
                 }
-                
-                while (boxNx >= 0 && boxNx < width && boxNy >= 0 && boxNy < height && floorGrid[boxNx][boxNy] === 'icefloor') {
-                    let nextBx = boxNx + dx;
-                    let nextBy = boxNy + dy;
-                    if (nextBx < 0 || nextBx >= width || nextBy < 0 || nextBy >= height || isWall(nextBx, nextBy) || isBoxAt(nextBx, nextBy)) break;
-                    boxNx = nextBx;
-                    boxNy = nextBy;
+            } else {
+                // Box continues sliding on its own direction
+                if (floorGrid[entity.x][entity.y] === 'icefloor' && entity.slideDir) {
+                    const dirData = directions[entity.slideDir];
+                    let nx = entity.x + dirData.dx;
+                    let ny = entity.y + dirData.dy;
+                    if (canSlideTo(nx, ny, dirData.dx, dirData.dy)) {
+                        startMoving(entity, nx, ny, entity.slideDir);
+                    }
                 }
-
-                boxes[boxIndex].x = boxNx;
-                boxes[boxIndex].y = boxNy;
             }
-
-            while (nx >= 0 && nx < width && ny >= 0 && ny < height && floorGrid[nx][ny] === 'icefloor') {
-                let nextPx = nx + dx;
-                let nextPy = ny + dy;
-                if (nextPx < 0 || nextPx >= width || nextPy < 0 || nextPy >= height || isWall(nextPx, nextPy) || isBoxAt(nextPx, nextPy)) break;
-                nx = nextPx;
-                ny = nextPy;
-            }
-
-            player.x = nx;
-            player.y = ny;
-
-            setTimeout(() => { checkWin(); }, 500);
+        } else {
+            const startX = entity.x * GRID_SIZE;
+            const startY = entity.y * GRID_SIZE;
+            const endX = entity.targetX * GRID_SIZE;
+            const endY = entity.targetY * GRID_SIZE;
+            entity.pixelX = startX + (endX - startX) * entity.moveProgress;
+            entity.pixelY = startY + (endY - startY) * entity.moveProgress;
         }
     }
 
@@ -1282,8 +1395,11 @@ Player: 2B`;
     }
 
     function gameLoop() {
+        processMovement();     // handle queued player inputs
+        updateAllEntities();   // animate & slide everything every frame
         if (isEditing) drawEditor();
         else draw();
+        if (!isEditing) checkWin();  // check after movement
         requestAnimationFrame(gameLoop);
     }
 
@@ -1462,7 +1578,7 @@ Player: 2B`;
                 const floorImg = (floorGrid[b.x] && floorGrid[b.x][b.y] === 'icefloor') ? images.icefloor : images.floor;
                 ctx.drawImage(floorImg, b.x * GRID_SIZE, b.y * GRID_SIZE);
             }
-            ctx.drawImage(images.box, b.x * GRID_SIZE, b.y * GRID_SIZE);
+            ctx.drawImage(images.box, b.pixelX, b.pixelY);
         });
 
         if (player.x !== undefined && player.y !== undefined) {
@@ -1473,8 +1589,24 @@ Player: 2B`;
                 const floorImg = (floorGrid[player.x] && floorGrid[player.x][player.y] === 'icefloor') ? images.icefloor : images.floor;
                 ctx.drawImage(floorImg, player.x * GRID_SIZE, player.y * GRID_SIZE);
             }
-            const playerImgKey = directions[player.facing].look;
-            ctx.drawImage(images[playerImgKey], player.x * GRID_SIZE, player.y * GRID_SIZE);
+            
+            let playerImg;
+            if (player.isMoving && !player.isSliding) {
+                const step = player.walkStep + 1; // 1 or 2
+                if (player.moveProgress < 0.25 || player.moveProgress > 0.75) {
+                    playerImg = images[directions[player.facing].look];
+                } else {
+                    playerImg = images[`walk${player.facing}${step}`];
+                }
+            } else if (player.isMoving && player.isSliding) {
+                // Frozen on the walk png it was on
+                const step = player.walkStep + 1;
+                playerImg = images[`walk${player.facing}${step}`];
+            } else {
+                playerImg = images[directions[player.facing].look];
+            }
+            
+            ctx.drawImage(playerImg, player.pixelX, player.pixelY);
         }
 
         ctx.restore();

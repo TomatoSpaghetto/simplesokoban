@@ -4,8 +4,6 @@ A lightweight web-based Sokoban engine.
 
 `SimpleSokoban` is designed to be easy to understand and play. It runs entirely in your browser.
 
-https://tomatospaghetto.github.io/simplesokoban/
-
 ## How to Play
 
 The goal of Sokoban is to push all the boxes onto the designated target switches.
@@ -19,7 +17,7 @@ The goal of Sokoban is to push all the boxes onto the designated target switches
 
 This project includes a built-in Level Editor that allows you to design your own puzzles.
 
-1. **Build:** Use the palette tools to place walls, boxes, floors and switches.
+1. **Build:** Use the palette tools to place walls, boxes, and switches.
 2. **Download & Import:** When you're happy with your design, use the "Download & Import" button. This will save your levels to a `level.txt` file on your device and let you play them instantly.
 3. **Sharing:** To share your levels, just send your `level.txt` file to a friend! They can use the "Choose File" button on the main menu to load and play your creations.
 
@@ -31,6 +29,3 @@ This project includes a built-in Level Editor that allows you to design your own
 ## License
 
 This project is licensed under the **MIT License**. You are free to use, modify, and distribute the code as long as the original copyright and license notice are included.
-
-
-

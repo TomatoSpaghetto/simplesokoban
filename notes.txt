@@ -1,0 +1,45 @@
+### HTML Structure (index.html)
+
+Lines 73 - 82: The #win-overlay div. This is a "modal" (a window that sits on top of the screen). It's hidden by default (display: none) and only shown when you win, using buttons with "onclick" attributes to trigger JavaScript functions like nextLevel().
+
+Lines 83 - 95: The #menu div. This is the main starting screen. It contains a level selection area that gets filled with buttons dynamically by JavaScript, and a file input (Line 89) that lets you load your own level files.
+
+Line 106: The <canvas> element with id="gameCanvas". This is the actual "drawing board" for the game. Instead of using HTML elements for game objects, everything (walls, player, boxes) is drawn as pixels directly onto this surface using JavaScript.
+
+Lines 119 - 135: The #editor-ui div. This contains the layout for the Level Editor, including a second canvas and a "palette" of items you can click to select what to place on the grid.
+
+### CSS Styling (index.html)
+
+Line 8: "display: flex; flex-direction: column; justify-content: center; align-items: center;". This uses Flexbox to perfectly center everything in the middle of the screen, regardless of the device size.
+
+Line 9: "image-rendering: pixelated;". This is crucial for retro games! It prevents the browser from making the small 16x16 pixel images look blurry when they are scaled up.
+
+Lines 54 - 69: The @media (max-width: 600px) block. This is "Responsive Design." It tells the browser: "If the screen is smaller than 600 pixels (like a phone), change the layout." For example, it moves the sidebar to the top to save space.
+
+### JavaScript Logic (index.html)
+
+Line 138: GRID_SIZE = 16. The base unit of the game. Every movement and drawing happens in multiples of 16 pixels.
+
+Lines 142 - 160: Asset Loading. Creates "Image" objects in memory and sets their "src" (source). The game can't draw them until they are fully loaded.
+
+Line 456: window.addEventListener('keydown', handleInput). This "listens" for any key you press on your keyboard and sends it to the handleInput function to move the player.
+
+Line 461: gameLoop(). This starts the heart of the game. It uses "requestAnimationFrame" (Line 1023) to redraw the screen as fast as possible (usually 60 times per second), creating smooth visuals.
+
+Lines 605 - 661: movePlayer function. This is the "brain" of Sokoban. It doesn't just move the player; it looks one step ahead. If there's a box, it looks *two* steps ahead to see if the box can be pushed.
+
+Lines 671 - 708: handleEditorClick. This converts your mouse click position on the screen into "Grid Coordinates" (like Column 5, Row 3) so it knows exactly where to place a wall or box in the editor.
+
+Line 888: fitCamera function. This calculates how much to zoom in (scale) and where to center the view so that the level always fits perfectly on your screen, whether you're using a tiny phone or a big monitor.
+
+Lines 1118 - 1138: Flood Fill Algorithm. Used here to find all "inside" floor tiles. It starts from the edges and marks everything "outside" the walls, so the game knows only to draw floors where the player can actually walk.
+
+Line 977: Immediate permanent application of applyInfill during parseLevel. This ensures that every enclosed space in a level automatically gets the correct floor type immediately upon loading. After an infill occurs, all infilled tiles are treated as if they were manually placed by the user, which prevents them from being unintentionally wiped or overwritten during future edits. The refined logic only fills empty spaces, ensuring that existing floors are preserved.
+
+Line 818: Permanent global application of infill when interacting with the level editor. Every time any tool is used (walls, floors, boxes, switches, player, or eraser), the applyInfill function is triggered immediately. This ensures that all automatic flooring you see in the editor is committed to the editor's floor grid instantly as manual flooring. This "locks in" the floors so they persist correctly and are never overwritten by subsequent changes. Manual floor tools ('Floor' and 'Ice Floor') explicitly set floor types, and the 'Erase Floor' tool resets tiles to allow for re-infilling or empty space, with both triggering a re-calculation to keep the entire room's floors stable.
+
+Lines 1182 - 1222: Enhanced Global Editor Rendering. The editor now directly renders the editorFloorGrid, which is kept up-to-date in real-time by the interactive infill logic. This provides immediate, permanent feedback as you build. Manual placements take priority, and automatic infill only helps fill the gaps, which are then immediately converted into permanent manual-style data.
+
+Lines 1267 - 1345: The draw function. The "artist" of the game. It uses a flood fill from the edges to identify "outside" areas. It renders all manual floors regardless of their position and ensures that auto-filled floors are only drawn in "inside" navigable positions. It also specifically checks the enclosure state and manual floor grid before drawing floors under walls, switches, boxes, and the player. This ensures that objects are always visible even in the "black void," and only show a background floor if one was manually placed or if they are within a completed room.
+
+Lines 894 - 977: loadLevelIntoEditor function. This allows you to import a single level directly into the editor for modification. It reads a .txt file, verifies that it only contains one level (showing an error message if multiple are found), and then populates the editor's grid and object arrays. It automatically triggers applyInfill after loading to ensure the imported level is fully stabilized and ready for editing.
