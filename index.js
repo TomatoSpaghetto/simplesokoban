@@ -540,7 +540,8 @@ Player: 2B`;
 
         parseLevel(levels[index].data);
 
-        if (!isPlayerEnclosed(grid, width, height, player.x, player.y)) {
+        const allPlayersEnclosed = players.every(p => isPlayerEnclosed(grid, width, height, p.x, p.y));
+        if (!allPlayersEnclosed) {
             showEnclosureWarning("Main Menu");
             return;
         }
@@ -1274,8 +1275,10 @@ let offsetX = 0, offsetY = 0;
             maxX = Math.max(maxX, b.x); maxY = Math.max(maxY, b.y);
             hasContent = true;
         });
-        minX = Math.min(minX, player.x); minY = Math.min(minY, player.y);
-        maxX = Math.max(maxX, player.x); maxY = Math.max(maxY, player.y);
+        players.forEach(p => {
+            minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+        });
         hasContent = true;
 
         if (!hasContent) {
@@ -1304,7 +1307,6 @@ let offsetX = 0, offsetY = 0;
         if (isEditing) return;
         if (document.getElementById('gameCanvas').style.display === 'none') return;
         if (document.getElementById('win-overlay').style.display === 'block') return;
-        if (player.isMoving) return;
 
         let dir = null;
         if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'up') dir = 'up';
@@ -1313,16 +1315,20 @@ let offsetX = 0, offsetY = 0;
         if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'right') dir = 'right';
 
         if (dir) {
-            if (moveQueue.length < 2) {
+            const anyPlayerCanMove = players.some(p => !p.isMoving);
+            if (anyPlayerCanMove && moveQueue.length < 2) {
                 moveQueue.push(dir);
             }
         }
     }
 
     function processMovement() {
-        let dir = moveQueue.shift();
-        if (!dir) return;
+        if (moveQueue.length === 0) return;
+        
+        const anyPlayerCanMove = players.some(p => !p.isMoving);
+        if (!anyPlayerCanMove) return;
 
+        let dir = moveQueue.shift();
         const dirData = directions[dir];
         let moves = [];
 
