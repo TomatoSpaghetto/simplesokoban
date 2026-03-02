@@ -2891,3 +2891,12 @@ function draw() {
 
     ctx.restore();
 }
+
+function openControls() {
+    document.getElementById('controls-overlay').style.display = 'block';
+    document.getElementById('controls-overlay-backdrop').style.display = 'block';
+}
+function closeControls() {
+    document.getElementById('controls-overlay').style.display = 'none';
+    document.getElementById('controls-overlay-backdrop').style.display = 'none';
+}

@@ -183,6 +183,59 @@
             cursor: move;
         }
 
+        #controls-overlay {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.97);
+            padding: 30px 28px;
+            border: 2px solid white;
+            text-align: left;
+            z-index: 3000;
+            width: 92%;
+            max-width: 460px;
+            border-radius: 12px;
+            box-sizing: border-box;
+        }
+        #controls-overlay h2 {
+            font-size: 26px;
+            margin: 0 0 18px 0;
+            color: yellow;
+            text-align: center;
+        }
+        #controls-overlay h3 {
+            font-size: 16px;
+            color: #adf;
+            margin: 14px 0 6px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        #controls-overlay p {
+            margin: 4px 0;
+            font-size: 15px;
+            line-height: 1.5;
+            color: #ddd;
+        }
+        #controls-overlay kbd {
+            display: inline-block;
+            background: #333;
+            border: 1px solid #888;
+            border-radius: 4px;
+            padding: 1px 7px;
+            font-size: 13px;
+            font-family: monospace;
+            color: #fff;
+        }
+        #controls-overlay-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 2999;
+        }
+
         #win-overlay {
             display: none;
             position: fixed;
@@ -497,12 +550,28 @@
     </div>
 </div>
 
+<div id="controls-overlay-backdrop" onclick="closeControls()"></div>
+<div id="controls-overlay">
+    <h2>Controls</h2>
+    <h3>🖥️ PC</h3>
+    <p><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> &nbsp;or&nbsp; <kbd>↑</kbd> <kbd>←</kbd> <kbd>↓</kbd> <kbd>→</kbd> — Move</p>
+    <p><kbd>R</kbd> — Restart the current level</p>
+    <p><kbd>F</kbd> — View other floors</p>
+    <h3>📱 Mobile</h3>
+    <p>Swipe in the direction you want to move.</p>
+    <div style="text-align:center; margin-top: 20px;">
+        <button class="btn" onclick="closeControls()">Close</button>
+    </div>
+</div>
+
 <div id="menu">
     <h1>SimpleSokoban</h1>
     <p>Select a Level</p>
     <div id="level-select"></div>
+    <button class="btn" style="margin-top: 18px;" onclick="openControls()">Controls</button>
+
     <div id="local-load-fallback" style="margin-top: 25px; border: 1px dashed #666; padding: 18px; border-radius: 8px;">
-        <p>Load a custom <code>level.txt</code> file:</p>
+        <p style="margin-top:0;">Load a custom <code>level.txt</code> file:</p>
         <input type="file" id="level-file-input" accept=".txt">
     </div>
     <div class="menu-button-row">
